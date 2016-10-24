@@ -1,4 +1,4 @@
-var _user$project$Native_HttpServer = function() {
+var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
 
   var isNode = typeof global !== "undefined" && ({}).toString.call(global) === '[object global]';
 

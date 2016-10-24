@@ -1,8 +1,8 @@
 all: build run
 
 build:
-	elm make --warn src/ClientStarter.elm --output index.html
-	elm make --warn src/ServerStarter.elm --output server.js
+	elm make --warn examples/ClientStarter.elm --output examples/index.html
+	elm make --warn examples/ServerStarter.elm --output examples/server.js
 
 run:
-	node server.js
+	node examples/server.js
