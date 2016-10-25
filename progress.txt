@@ -1,0 +1,8 @@
+Version 1
+------------
+- Multi-tier commands wrap server and client commands which are unwrapped by the program methods for server and client.
+- Configuration for server, including hostname, port and the ability to host the client file
+- Basic remote procedure support
+- Remote procedures are only registered when defined at compile time
+  --> need for sending arguments at runtime
+- No server state yet

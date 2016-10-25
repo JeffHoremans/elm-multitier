@@ -28,9 +28,19 @@ import Multitier.Error exposing (Error(..))
 import Multitier.Callstack as Callstack
 
 type alias CallId = Int
-type alias RemoteProcedure = (CallId, (Task Error Value))
 
-type MultitierCmd msg = ServerCmd (Error -> msg) (Value -> msg) RemoteProcedure | ClientCmd (Cmd msg) | Batch (List (MultitierCmd msg))
+type alias RemoteProcedure = (CallId, Procedure)
+
+type Procedure =  P0 (Task Error Value) |
+                  P1 Value (Value -> Task Error Value) |
+                  P2 Value Value (Value -> Value -> Task Error Value) |
+                  P3 Value Value Value (Value -> Value -> Value -> Task Error Value) |
+                  P4 Value Value Value Value (Value -> Value -> Value -> Value -> Task Error Value) |
+                  P5 Value Value Value Value Value (Value -> Value -> Value -> Value -> Value -> Task Error Value) |
+                  P6 Value Value Value Value Value Value (Value -> Value -> Value -> Value -> Value -> Value -> Task Error Value) |
+                  P7 Value Value Value Value Value Value Value (Value -> Value -> Value -> Value -> Value -> Value -> Value -> Task Error Value)
+
+type MultitierCmd msg = ServerCmd (Error -> msg) (Value -> msg) (CallId, (Task Error Value)) | ClientCmd (Cmd msg) | Batch (List (MultitierCmd msg))
 
 {-|-}
 map : (a -> msg) -> MultitierCmd a -> MultitierCmd msg
@@ -187,11 +197,13 @@ handle : Config -> HttpServer.Request -> model -> (model, Cmd msg)
 handle { clientFile } request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" ((HttpServer.getPath request)))
   in case (Debug.log "path list" pathList) of
-    -- "/" -> (model, Callstack.call 0 request)
+
     [] -> case clientFile of
       Just filename -> (model, HttpServer.replyFile request filename)
       _ -> (model, HttpServer.reply request (encodeResponse (Response Nothing "Invalid url")))
+
     [ "call", callid ] -> (model, Callstack.call 0 request)
+
     _ -> (model, HttpServer.reply request (encodeResponse (Response Nothing "Invalid url")))
 
 updateHelp : (a -> b) -> (model, Cmd a) -> (model, Cmd b)

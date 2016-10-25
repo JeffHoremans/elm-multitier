@@ -15,7 +15,9 @@ type alias Model = { input: String, messages: List String, error: String }
 
 
 config: Config
-config = { httpPort = 8081, hostname = "localhost", clientFile = Just "examples/index.html" }
+config = { httpPort = 8081
+         , hostname = "localhost"
+         , clientFile = Just "examples/index.html" }
 
 init : ( Model, MultitierCmd Msg)
 init = Model "" [] "" !! [
