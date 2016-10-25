@@ -1,5 +1,7 @@
 effect module HttpServer where { command = MyCmd, subscription = MySub } exposing
   ( reply
+  , replyFile
+  , getPath
   , listen
   , Request
   )
@@ -33,8 +35,7 @@ type alias Request = Http.Request
 -- COMMANDS
 
 
-type MyCmd msg
-  = Reply Request Value
+type MyCmd msg = Reply Request Value | ReplyFile Request String
 
 
 {-| Reply to a particular request. You might say something like this:
@@ -44,10 +45,18 @@ reply : Request -> Value -> Cmd msg
 reply request message =
   command (Reply request message)
 
+replyFile : Request -> String -> Cmd msg
+replyFile request filename =
+  command (ReplyFile request filename)
+
+getPath : Request -> String
+getPath request = Http.getPath request
+
 
 cmdMap : (a -> b) -> MyCmd a -> MyCmd b
-cmdMap _ (Reply request msg) =
-  Reply request msg
+cmdMap _ cmd = case cmd of
+  Reply request msg -> Reply request msg
+  ReplyFile request filename -> ReplyFile request filename
 
 
 
@@ -157,6 +166,10 @@ sendReplies cmds =
 
     Reply request msg :: rest ->
       Http.reply request msg
+        &> sendReplies rest
+
+    ReplyFile request filename :: rest ->
+      Http.replyFile request filename
         &> sendReplies rest
 
 

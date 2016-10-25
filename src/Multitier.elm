@@ -21,6 +21,7 @@ import Task exposing (Task, andThen)
 import Http
 import Json.Encode as Encode exposing (Value)
 import Json.Decode as Decode exposing (Decoder, object2, (:=))
+import String
 
 import HttpServer
 import Multitier.Error exposing (Error(..))
@@ -101,7 +102,7 @@ unbatch ptype config mtcmd =
     ServerCmd onError onSucceed (callid, task) -> case ptype of
       Server -> Callstack.addCall task
       Client -> Task.perform onError onSucceed
-        ((Http.get decodeResponse ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/" ++ (toString callid))
+        ((Http.get decodeResponse ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/call/" ++ (toString callid))
           |> Task.mapError (\err -> NetworkError err))
             `andThen` \response -> case response.data of
               Just data -> Task.succeed data
@@ -115,7 +116,8 @@ unbatch ptype config mtcmd =
 
 type ProgramType = Server | Client
 type alias Config = { httpPort: Int
-                    , hostname: String }
+                    , hostname: String
+                    , clientFile: Maybe String }
 
 type MyMsg msg = UserMsg msg | Request HttpServer.Request | Reply HttpServer.Request String (Maybe Value)
 
@@ -167,7 +169,7 @@ programWithFlags ptype stuff = case ptype of
                       updateHelp UserMsg
                         <| case msg of
                             UserMsg userMsg -> update userMsg model
-                            Request request -> handle request model
+                            Request request -> handle stuff.config request model
                             Reply request message data -> (model, HttpServer.reply request (encodeResponse (Response data message)))
                      wrapSubscriptions model = Sub.batch
                       [ Callstack.onCallComplete Reply, HttpServer.listen stuff.config.httpPort Request, Sub.map UserMsg (stuff.subscriptions model)]
@@ -181,8 +183,16 @@ programWithFlags ptype stuff = case ptype of
             , view = wrapView
             }
 
-handle : HttpServer.Request -> model -> (model, Cmd msg)
-handle request model = (model, Callstack.call 0 request)
+handle : Config -> HttpServer.Request -> model -> (model, Cmd msg)
+handle { clientFile } request model =
+  let pathList = List.filter (not << String.isEmpty) (String.split "/" ((HttpServer.getPath request)))
+  in case (Debug.log "path list" pathList) of
+    -- "/" -> (model, Callstack.call 0 request)
+    [] -> case clientFile of
+      Just filename -> (model, HttpServer.replyFile request filename)
+      _ -> (model, HttpServer.reply request (encodeResponse (Response Nothing "Invalid url")))
+    [ "call", callid ] -> (model, Callstack.call 0 request)
+    _ -> (model, HttpServer.reply request (encodeResponse (Response Nothing "Invalid url")))
 
 updateHelp : (a -> b) -> (model, Cmd a) -> (model, Cmd b)
 updateHelp func (model, cmds) =

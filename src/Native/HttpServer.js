@@ -1,14 +1,17 @@
 var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
 
   var isNode = typeof global !== "undefined" && ({}).toString.call(global) === '[object global]';
+  var Utils =  _elm_lang$core$Native_Utils;
+  var Scheduler = _elm_lang$core$Native_Scheduler;
 
   if(isNode){
 
       var http = require('http');
       var url = require('url');
+      var fs = require('fs');
 
       var listen = function (port, settings) {
-        return _elm_lang$core$Native_Scheduler.nativeBinding(function (callback) {
+        return Scheduler.nativeBinding(function (callback) {
 
           var server = http.createServer();
 
@@ -23,12 +26,12 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
               request: req,
               response: res
             };
-            _elm_lang$core$Native_Scheduler.rawSpawn(settings.onRequest(request));
+            Scheduler.rawSpawn(settings.onRequest(request));
           });
 
           server.on('close', function () {
             console.log('server closed');
-            _elm_lang$core$Native_Scheduler.rawSpawn(settings.onClose());
+            Scheduler.rawSpawn(settings.onClose());
           });
 
           server.listen(port);
@@ -40,11 +43,28 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       }
 
       var reply = function(request, string) {
-        return _elm_lang$core$Native_Scheduler.nativeBinding(function (callback) {
+        return Scheduler.nativeBinding(function (callback) {
           request.response.end(string);
 
           callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         });
+      }
+
+      var replyFile = function(request, filename) {
+        return Scheduler.nativeBinding(function(callback) {
+
+          fs.readFile(filename,function (err, data){
+            if(err) {
+              request.response.end()
+              callback(Scheduler.fail(Utils.Tuple0));
+            } else {
+              // res.writeHead(200, {'Content-Type': 'text/html','Content-Length':data.length});
+              request.response.write(data);
+              request.response.end();
+              callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+            }
+          });
+        })
       }
 
       var getPath = function(req) {
@@ -52,17 +72,18 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       }
 
       var close = function(server) {
-        return _elm_lang$core$Native_Scheduler.nativeBinding(function (callback) {
+        return Scheduler.nativeBinding(function (callback) {
 
           server.close();
 
-          callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+          callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         });
       }
 
       return {
         listen: F2(listen),
         reply: F2(reply),
+        replyFile: F2(replyFile),
         getPath: getPath,
         close: close
       };
@@ -75,6 +96,12 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       }
 
       var reply = function(request, string) {
+        return Scheduler.nativeBinding(function(callback) {
+          return callback(Scheduler.fail(Utils.Tuple0));
+        });
+      }
+
+      var replyFile = function(request, filename) {
         return Scheduler.nativeBinding(function(callback) {
           return callback(Scheduler.fail(Utils.Tuple0));
         });
@@ -93,6 +120,7 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       return {
         listen: F2(listen),
         reply: F2(reply),
+        replyFile: F2(replyFile),
         getPath : getPath,
         close: close
       };
