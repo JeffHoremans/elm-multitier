@@ -8320,14 +8320,17 @@ var _elm_lang$core$Process$spawn = _elm_lang$core$Native_Scheduler.spawn;
 var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
 
   var isNode = typeof global !== "undefined" && ({}).toString.call(global) === '[object global]';
+  var Utils =  _elm_lang$core$Native_Utils;
+  var Scheduler = _elm_lang$core$Native_Scheduler;
 
   if(isNode){
 
       var http = require('http');
       var url = require('url');
+      var fs = require('fs');
 
       var listen = function (port, settings) {
-        return _elm_lang$core$Native_Scheduler.nativeBinding(function (callback) {
+        return Scheduler.nativeBinding(function (callback) {
 
           var server = http.createServer();
 
@@ -8342,12 +8345,12 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
               request: req,
               response: res
             };
-            _elm_lang$core$Native_Scheduler.rawSpawn(settings.onRequest(request));
+            Scheduler.rawSpawn(settings.onRequest(request));
           });
 
           server.on('close', function () {
             console.log('server closed');
-            _elm_lang$core$Native_Scheduler.rawSpawn(settings.onClose());
+            Scheduler.rawSpawn(settings.onClose());
           });
 
           server.listen(port);
@@ -8359,11 +8362,28 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       }
 
       var reply = function(request, string) {
-        return _elm_lang$core$Native_Scheduler.nativeBinding(function (callback) {
+        return Scheduler.nativeBinding(function (callback) {
           request.response.end(string);
 
           callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         });
+      }
+
+      var replyFile = function(request, filename) {
+        return Scheduler.nativeBinding(function(callback) {
+
+          fs.readFile(filename,function (err, data){
+            if(err) {
+              request.response.end()
+              callback(Scheduler.fail(Utils.Tuple0));
+            } else {
+              // res.writeHead(200, {'Content-Type': 'text/html','Content-Length':data.length});
+              request.response.write(data);
+              request.response.end();
+              callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+            }
+          });
+        })
       }
 
       var getPath = function(req) {
@@ -8371,17 +8391,18 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       }
 
       var close = function(server) {
-        return _elm_lang$core$Native_Scheduler.nativeBinding(function (callback) {
+        return Scheduler.nativeBinding(function (callback) {
 
           server.close();
 
-          callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+          callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         });
       }
 
       return {
         listen: F2(listen),
         reply: F2(reply),
+        replyFile: F2(replyFile),
         getPath: getPath,
         close: close
       };
@@ -8394,6 +8415,12 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       }
 
       var reply = function(request, string) {
+        return Scheduler.nativeBinding(function(callback) {
+          return callback(Scheduler.fail(Utils.Tuple0));
+        });
+      }
+
+      var replyFile = function(request, filename) {
         return Scheduler.nativeBinding(function(callback) {
           return callback(Scheduler.fail(Utils.Tuple0));
         });
@@ -8412,6 +8439,7 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       return {
         listen: F2(listen),
         reply: F2(reply),
+        replyFile: F2(replyFile),
         getPath : getPath,
         close: close
       };
@@ -8440,6 +8468,10 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
 })();
 var _JeffHoremans$elm_multitier$HttpServer_LowLevel$close = _JeffHoremans$elm_multitier$Native_HttpServer.close;
 var _JeffHoremans$elm_multitier$HttpServer_LowLevel$getPath = _JeffHoremans$elm_multitier$Native_HttpServer.getPath;
+var _JeffHoremans$elm_multitier$HttpServer_LowLevel$replyFile = F2(
+	function (request, filename) {
+		return A2(_JeffHoremans$elm_multitier$Native_HttpServer.replyFile, request, filename);
+	});
 var _JeffHoremans$elm_multitier$HttpServer_LowLevel$reply = F2(
 	function (request, value) {
 		return A2(
@@ -8449,7 +8481,6 @@ var _JeffHoremans$elm_multitier$HttpServer_LowLevel$reply = F2(
 	});
 var _JeffHoremans$elm_multitier$HttpServer_LowLevel$listen = F2(
 	function (portNumber, settings) {
-		var test = A2(_elm_lang$core$Debug$log, 'TEST', portNumber);
 		return A2(_JeffHoremans$elm_multitier$Native_HttpServer.listen, portNumber, settings);
 	});
 var _JeffHoremans$elm_multitier$HttpServer_LowLevel$Settings = F2(
@@ -8530,11 +8561,21 @@ var _JeffHoremans$elm_multitier$HttpServer$sendReplies = function (cmds) {
 		return _elm_lang$core$Task$succeed(
 			{ctor: '_Tuple0'});
 	} else {
-		return A2(
-			_JeffHoremans$elm_multitier$HttpServer_ops['&>'],
-			A2(_JeffHoremans$elm_multitier$HttpServer_LowLevel$reply, _p4._0._0, _p4._0._1),
-			_JeffHoremans$elm_multitier$HttpServer$sendReplies(_p4._1));
+		if (_p4._0.ctor === 'Reply') {
+			return A2(
+				_JeffHoremans$elm_multitier$HttpServer_ops['&>'],
+				A2(_JeffHoremans$elm_multitier$HttpServer_LowLevel$reply, _p4._0._0, _p4._0._1),
+				_JeffHoremans$elm_multitier$HttpServer$sendReplies(_p4._1));
+		} else {
+			return A2(
+				_JeffHoremans$elm_multitier$HttpServer_ops['&>'],
+				A2(_JeffHoremans$elm_multitier$HttpServer_LowLevel$replyFile, _p4._0._0, _p4._0._1),
+				_JeffHoremans$elm_multitier$HttpServer$sendReplies(_p4._1));
+		}
 	}
+};
+var _JeffHoremans$elm_multitier$HttpServer$getPath = function (request) {
+	return _JeffHoremans$elm_multitier$HttpServer_LowLevel$getPath(request);
 };
 var _JeffHoremans$elm_multitier$HttpServer$subscription = _elm_lang$core$Native_Platform.leaf('HttpServer');
 var _JeffHoremans$elm_multitier$HttpServer$command = _elm_lang$core$Native_Platform.leaf('HttpServer');
@@ -8544,6 +8585,15 @@ var _JeffHoremans$elm_multitier$HttpServer$State = F2(
 	});
 var _JeffHoremans$elm_multitier$HttpServer$init = _elm_lang$core$Task$succeed(
 	A2(_JeffHoremans$elm_multitier$HttpServer$State, _elm_lang$core$Dict$empty, _elm_lang$core$Dict$empty));
+var _JeffHoremans$elm_multitier$HttpServer$ReplyFile = F2(
+	function (a, b) {
+		return {ctor: 'ReplyFile', _0: a, _1: b};
+	});
+var _JeffHoremans$elm_multitier$HttpServer$replyFile = F2(
+	function (request, filename) {
+		return _JeffHoremans$elm_multitier$HttpServer$command(
+			A2(_JeffHoremans$elm_multitier$HttpServer$ReplyFile, request, filename));
+	});
 var _JeffHoremans$elm_multitier$HttpServer$Reply = F2(
 	function (a, b) {
 		return {ctor: 'Reply', _0: a, _1: b};
@@ -8554,9 +8604,13 @@ var _JeffHoremans$elm_multitier$HttpServer$reply = F2(
 			A2(_JeffHoremans$elm_multitier$HttpServer$Reply, request, message));
 	});
 var _JeffHoremans$elm_multitier$HttpServer$cmdMap = F2(
-	function (_p6, _p5) {
-		var _p7 = _p5;
-		return A2(_JeffHoremans$elm_multitier$HttpServer$Reply, _p7._0, _p7._1);
+	function (_p5, cmd) {
+		var _p6 = cmd;
+		if (_p6.ctor === 'Reply') {
+			return A2(_JeffHoremans$elm_multitier$HttpServer$Reply, _p6._0, _p6._1);
+		} else {
+			return A2(_JeffHoremans$elm_multitier$HttpServer$ReplyFile, _p6._0, _p6._1);
+		}
 	});
 var _JeffHoremans$elm_multitier$HttpServer$Listen = F2(
 	function (a, b) {
@@ -8569,13 +8623,13 @@ var _JeffHoremans$elm_multitier$HttpServer$listen = F2(
 	});
 var _JeffHoremans$elm_multitier$HttpServer$subMap = F2(
 	function (func, sub) {
-		var _p8 = sub;
+		var _p7 = sub;
 		return A2(
 			_JeffHoremans$elm_multitier$HttpServer$Listen,
-			_p8._0,
-			function (_p9) {
+			_p7._0,
+			function (_p8) {
 				return func(
-					_p8._1(_p9));
+					_p7._1(_p8));
 			});
 	});
 var _JeffHoremans$elm_multitier$HttpServer$Listening = function (a) {
@@ -8607,7 +8661,7 @@ var _JeffHoremans$elm_multitier$HttpServer$open = F2(
 						router,
 						A2(_JeffHoremans$elm_multitier$HttpServer$Request, portNumber, request));
 				},
-				onClose: function (_p10) {
+				onClose: function (_p9) {
 					return A2(
 						_elm_lang$core$Platform$sendToSelf,
 						router,
@@ -8631,7 +8685,7 @@ var _JeffHoremans$elm_multitier$HttpServer$attemptOpen = F2(
 var _JeffHoremans$elm_multitier$HttpServer$onEffects = F4(
 	function (router, cmds, subs, state) {
 		var newSubs = A2(_JeffHoremans$elm_multitier$HttpServer$buildSubDict, subs, _elm_lang$core$Dict$empty);
-		var cleanup = function (_p11) {
+		var cleanup = function (_p10) {
 			var rightStep = F3(
 				function (portNumber, server, getNewServers) {
 					return A2(
@@ -8640,14 +8694,14 @@ var _JeffHoremans$elm_multitier$HttpServer$onEffects = F4(
 						getNewServers);
 				});
 			var bothStep = F4(
-				function (portNumber, _p12, server, getNewServers) {
+				function (portNumber, _p11, server, getNewServers) {
 					return A2(
 						_elm_lang$core$Task$map,
 						A2(_elm_lang$core$Dict$insert, portNumber, server),
 						getNewServers);
 				});
 			var leftStep = F3(
-				function (portNumber, _p13, getNewServers) {
+				function (portNumber, _p12, getNewServers) {
 					return A2(
 						_elm_lang$core$Task$andThen,
 						getNewServers,
@@ -8695,8 +8749,8 @@ var _JeffHoremans$elm_multitier$HttpServer$onEffects = F4(
 	});
 var _JeffHoremans$elm_multitier$HttpServer$onSelfMsg = F3(
 	function (router, selfMsg, state) {
-		var _p14 = selfMsg;
-		switch (_p14.ctor) {
+		var _p13 = selfMsg;
+		switch (_p13.ctor) {
 			case 'Request':
 				var requests = A2(
 					_elm_lang$core$List$map,
@@ -8704,31 +8758,31 @@ var _JeffHoremans$elm_multitier$HttpServer$onSelfMsg = F3(
 						return A2(
 							_elm_lang$core$Platform$sendToApp,
 							router,
-							tagger(_p14._1));
+							tagger(_p13._1));
 					},
 					A2(
 						_elm_lang$core$Maybe$withDefault,
 						_elm_lang$core$Native_List.fromArray(
 							[]),
-						A2(_elm_lang$core$Dict$get, _p14._0, state.subs)));
+						A2(_elm_lang$core$Dict$get, _p13._0, state.subs)));
 				return A2(
 					_JeffHoremans$elm_multitier$HttpServer_ops['&>'],
 					_elm_lang$core$Task$sequence(requests),
 					_elm_lang$core$Task$succeed(state));
 			case 'Die':
-				var _p16 = _p14._0;
-				var _p15 = A2(_elm_lang$core$Dict$get, _p16, state.servers);
-				if (_p15.ctor === 'Nothing') {
+				var _p15 = _p13._0;
+				var _p14 = A2(_elm_lang$core$Dict$get, _p15, state.servers);
+				if (_p14.ctor === 'Nothing') {
 					return _elm_lang$core$Task$succeed(state);
 				} else {
 					return A2(
 						_elm_lang$core$Task$andThen,
-						A2(_JeffHoremans$elm_multitier$HttpServer$attemptOpen, router, _p16),
+						A2(_JeffHoremans$elm_multitier$HttpServer$attemptOpen, router, _p15),
 						function (pid) {
 							return _elm_lang$core$Task$succeed(
 								A3(
 									_JeffHoremans$elm_multitier$HttpServer$updateServer,
-									_p16,
+									_p15,
 									_JeffHoremans$elm_multitier$HttpServer$Opening(pid),
 									state));
 						});
@@ -8737,8 +8791,8 @@ var _JeffHoremans$elm_multitier$HttpServer$onSelfMsg = F3(
 				return _elm_lang$core$Task$succeed(
 					A3(
 						_JeffHoremans$elm_multitier$HttpServer$updateServer,
-						_p14._0,
-						_JeffHoremans$elm_multitier$HttpServer$Listening(_p14._1),
+						_p13._0,
+						_JeffHoremans$elm_multitier$HttpServer$Listening(_p13._1),
 						state));
 		}
 	});
@@ -8911,14 +8965,6 @@ var _JeffHoremans$elm_multitier$Multitier$updateHelp = F2(
 			_1: A2(_elm_lang$core$Platform_Cmd$map, func, _p1._1)
 		};
 	});
-var _JeffHoremans$elm_multitier$Multitier$handle = F2(
-	function (request, model) {
-		return {
-			ctor: '_Tuple2',
-			_0: model,
-			_1: A2(_JeffHoremans$elm_multitier$Multitier_Callstack$call, 0, request)
-		};
-	});
 var _JeffHoremans$elm_multitier$Multitier$encodeResponse = function (response) {
 	return _elm_lang$core$Json_Encode$object(
 		_elm_lang$core$Native_List.fromArray(
@@ -9005,7 +9051,7 @@ var _JeffHoremans$elm_multitier$Multitier$unbatch = F3(
 													_elm_lang$core$Basics$toString(config.httpPort),
 													A2(
 														_elm_lang$core$Basics_ops['++'],
-														'/',
+														'/call/',
 														_elm_lang$core$Basics$toString(_p4._2._0)))))))),
 							function (response) {
 								var _p6 = response.data;
@@ -9063,9 +9109,62 @@ var _JeffHoremans$elm_multitier$Multitier$unwrapUpdate = F5(
 			_1: A3(_JeffHoremans$elm_multitier$Multitier$unbatch, ptype, config, cmds)
 		};
 	});
-var _JeffHoremans$elm_multitier$Multitier$Config = F2(
-	function (a, b) {
-		return {httpPort: a, hostname: b};
+var _JeffHoremans$elm_multitier$Multitier$handle = F3(
+	function (_p12, request, model) {
+		var _p13 = _p12;
+		var pathList = A2(
+			_elm_lang$core$List$filter,
+			function (_p14) {
+				return _elm_lang$core$Basics$not(
+					_elm_lang$core$String$isEmpty(_p14));
+			},
+			A2(
+				_elm_lang$core$String$split,
+				'/',
+				_JeffHoremans$elm_multitier$HttpServer$getPath(request)));
+		var _p15 = A2(_elm_lang$core$Debug$log, 'path list', pathList);
+		if (_p15.ctor === '[]') {
+			var _p16 = _p13.clientFile;
+			if (_p16.ctor === 'Just') {
+				return {
+					ctor: '_Tuple2',
+					_0: model,
+					_1: A2(_JeffHoremans$elm_multitier$HttpServer$replyFile, request, _p16._0)
+				};
+			} else {
+				return {
+					ctor: '_Tuple2',
+					_0: model,
+					_1: A2(
+						_JeffHoremans$elm_multitier$HttpServer$reply,
+						request,
+						_JeffHoremans$elm_multitier$Multitier$encodeResponse(
+							A2(_JeffHoremans$elm_multitier$Multitier$Response, _elm_lang$core$Maybe$Nothing, 'Invalid url')))
+				};
+			}
+		} else {
+			if (((_p15._0 === 'call') && (_p15._1.ctor === '::')) && (_p15._1._1.ctor === '[]')) {
+				return {
+					ctor: '_Tuple2',
+					_0: model,
+					_1: A2(_JeffHoremans$elm_multitier$Multitier_Callstack$call, 0, request)
+				};
+			} else {
+				return {
+					ctor: '_Tuple2',
+					_0: model,
+					_1: A2(
+						_JeffHoremans$elm_multitier$HttpServer$reply,
+						request,
+						_JeffHoremans$elm_multitier$Multitier$encodeResponse(
+							A2(_JeffHoremans$elm_multitier$Multitier$Response, _elm_lang$core$Maybe$Nothing, 'Invalid url')))
+				};
+			}
+		}
+	});
+var _JeffHoremans$elm_multitier$Multitier$Config = F3(
+	function (a, b, c) {
+		return {httpPort: a, hostname: b, clientFile: c};
 	});
 var _JeffHoremans$elm_multitier$Multitier$Batch = function (a) {
 	return {ctor: 'Batch', _0: a};
@@ -9095,29 +9194,29 @@ var _JeffHoremans$elm_multitier$Multitier$ServerCmd = F3(
 	});
 var _JeffHoremans$elm_multitier$Multitier$map = F2(
 	function (f, mtcmd) {
-		var _p12 = mtcmd;
-		switch (_p12.ctor) {
+		var _p17 = mtcmd;
+		switch (_p17.ctor) {
 			case 'ServerCmd':
 				return A3(
 					_JeffHoremans$elm_multitier$Multitier$ServerCmd,
-					function (_p13) {
+					function (_p18) {
 						return f(
-							_p12._0(_p13));
+							_p17._0(_p18));
 					},
-					function (_p14) {
+					function (_p19) {
 						return f(
-							_p12._1(_p14));
+							_p17._1(_p19));
 					},
-					{ctor: '_Tuple2', _0: _p12._2._0, _1: _p12._2._1});
+					{ctor: '_Tuple2', _0: _p17._2._0, _1: _p17._2._1});
 			case 'ClientCmd':
 				return _JeffHoremans$elm_multitier$Multitier$ClientCmd(
-					A2(_elm_lang$core$Platform_Cmd$map, f, _p12._0));
+					A2(_elm_lang$core$Platform_Cmd$map, f, _p17._0));
 			default:
 				return _JeffHoremans$elm_multitier$Multitier$Batch(
 					A2(
 						_elm_lang$core$List$map,
 						_JeffHoremans$elm_multitier$Multitier$map(f),
-						_p12._0));
+						_p17._0));
 		}
 	});
 var _JeffHoremans$elm_multitier$Multitier$performOnServer = F5(
@@ -9146,8 +9245,8 @@ var _JeffHoremans$elm_multitier$Multitier$UserMsg = function (a) {
 };
 var _JeffHoremans$elm_multitier$Multitier$programWithFlags = F2(
 	function (ptype, stuff) {
-		var _p15 = ptype;
-		if (_p15.ctor === 'Client') {
+		var _p20 = ptype;
+		if (_p20.ctor === 'Client') {
 			return _elm_lang$html$Html_App$programWithFlags(
 				{
 					init: A3(_JeffHoremans$elm_multitier$Multitier$unwrapInitWithFlags, _JeffHoremans$elm_multitier$Multitier$Client, stuff.config, stuff.init),
@@ -9187,21 +9286,21 @@ var _JeffHoremans$elm_multitier$Multitier$programWithFlags = F2(
 						_JeffHoremans$elm_multitier$Multitier$updateHelp,
 						_JeffHoremans$elm_multitier$Multitier$UserMsg,
 						function () {
-							var _p16 = msg;
-							switch (_p16.ctor) {
+							var _p21 = msg;
+							switch (_p21.ctor) {
 								case 'UserMsg':
-									return A2(update, _p16._0, model);
+									return A2(update, _p21._0, model);
 								case 'Request':
-									return A2(_JeffHoremans$elm_multitier$Multitier$handle, _p16._0, model);
+									return A3(_JeffHoremans$elm_multitier$Multitier$handle, stuff.config, _p21._0, model);
 								default:
 									return {
 										ctor: '_Tuple2',
 										_0: model,
 										_1: A2(
 											_JeffHoremans$elm_multitier$HttpServer$reply,
-											_p16._0,
+											_p21._0,
 											_JeffHoremans$elm_multitier$Multitier$encodeResponse(
-												A2(_JeffHoremans$elm_multitier$Multitier$Response, _p16._2, _p16._1)))
+												A2(_JeffHoremans$elm_multitier$Multitier$Response, _p21._2, _p21._1)))
 									};
 							}
 						}());
@@ -9211,19 +9310,19 @@ var _JeffHoremans$elm_multitier$Multitier$programWithFlags = F2(
 		}
 	});
 var _JeffHoremans$elm_multitier$Multitier$program = F2(
-	function (ptype, _p17) {
-		var _p18 = _p17;
+	function (ptype, _p22) {
+		var _p23 = _p22;
 		return A2(
 			_JeffHoremans$elm_multitier$Multitier$programWithFlags,
 			ptype,
 			{
-				config: _p18.config,
-				init: function (_p19) {
-					return _p18.init;
+				config: _p23.config,
+				init: function (_p24) {
+					return _p23.init;
 				},
-				update: _p18.update,
-				subscriptions: _p18.subscriptions,
-				view: _p18.view
+				update: _p23.update,
+				subscriptions: _p23.subscriptions,
+				view: _p23.view
 			});
 	});
 var _elm_lang$html$Html_Events$keyCode = A2(_elm_lang$core$Json_Decode_ops[':='], 'keyCode', _elm_lang$core$Json_Decode$int);
@@ -9723,7 +9822,7 @@ var _JeffHoremans$elm_multitier$Main$dupVal = function (val) {
 	return _elm_lang$core$Task$succeed(
 		A2(_elm_lang$core$Basics_ops['++'], val, val));
 };
-var _JeffHoremans$elm_multitier$Main$config = {httpPort: 8081, hostname: 'localhost'};
+var _JeffHoremans$elm_multitier$Main$config = {httpPort: 8081, hostname: 'localhost', clientFile: _elm_lang$core$Maybe$Nothing};
 var _JeffHoremans$elm_multitier$Main$Model = F3(
 	function (a, b, c) {
 		return {input: a, messages: b, error: c};
