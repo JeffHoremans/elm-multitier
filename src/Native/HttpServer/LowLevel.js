@@ -1,4 +1,4 @@
-var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
+var _JeffHoremans$elm_multitier$Native_HttpServer_LowLevel = function() {
 
   var isNode = typeof global !== "undefined" && ({}).toString.call(global) === '[object global]';
   var Utils =  _elm_lang$core$Native_Utils;
@@ -21,7 +21,6 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
           });
 
           server.on('request', function (req, res) {
-
             var request = {
               request: req,
               response: res
@@ -71,6 +70,14 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
         return url.parse(req.request.url).path;
       }
 
+      var getMethod = function(req) {
+        return req.request.method;
+      }
+
+      var getBody = function(req) {
+        return req.body;
+      }
+
       var close = function(server) {
         return Scheduler.nativeBinding(function (callback) {
 
@@ -85,6 +92,8 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
         reply: F2(reply),
         replyFile: F2(replyFile),
         getPath: getPath,
+        getMethod: getMethod,
+        getBody: getBody,
         close: close
       };
   } else {
@@ -108,6 +117,14 @@ var _JeffHoremans$elm_multitier$Native_HttpServer = function() {
       }
 
       var getPath = function(req) {
+        return ""
+      }
+
+      var getMethod = function(req) {
+        return ""
+      }
+
+      var getBody = function(req) {
         return ""
       }
 

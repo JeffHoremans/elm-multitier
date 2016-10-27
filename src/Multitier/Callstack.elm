@@ -1,30 +1,31 @@
 effect module Multitier.Callstack where { command = MyCmd, subscription = MySub }
-  exposing ( addCall, call, onCallComplete )
+  exposing ( addProcedure, callProcedure, onCallComplete )
 
 import Task exposing (Task, andThen, onError)
 import Dict exposing (Dict)
 import Json.Encode as Encode exposing (Value)
 import Function.Extra exposing ((>>>>))
 
-import Multitier.Error exposing (Error(..))
+-- import Multitier.Error exposing (Error(..))
+import Multitier.Procedure exposing (RemoteProcedure(..), Procedure(..), Identifier, Arguments(..))
 import HttpServer
 
 -- EFFECT MANAGER
 
-type MyCmd msg = AddCall (Task Error Value) | Call Int HttpServer.Request
+type MyCmd msg = AddProcedure RemoteProcedure | Call Identifier Arguments HttpServer.Request
 
 
-addCall : (Task Error Value) -> Cmd msg
-addCall task =
-  command (AddCall task)
+addProcedure : RemoteProcedure -> Cmd msg
+addProcedure pc =
+  command (AddProcedure pc)
 
-call : Int -> HttpServer.Request -> Cmd msg
-call identifier request = command (Call identifier request)
+callProcedure : Identifier -> Arguments -> HttpServer.Request -> Cmd msg
+callProcedure identifier arguments request = command (Call identifier arguments request)
 
 cmdMap : (a -> b) -> MyCmd a -> MyCmd b
 cmdMap f cmd = case cmd of
-  AddCall task -> AddCall task
-  Call identifier request -> Call identifier request
+  AddProcedure task -> AddProcedure task
+  Call identifier arguments request -> Call identifier arguments request
 
 
 
@@ -37,29 +38,37 @@ onCallComplete tagger =
 subMap : (a -> b) -> MySub a -> MySub b
 subMap func (OnCallComplete tagger) = OnCallComplete (tagger >>>> func)
 
-type alias State msg = { nextId : Int
-                   , callStack : Dict Int (Task Error Value)
-                   , subs: List (MySub msg)}
+type alias State msg = { callStack : Dict String Procedure
+                       , subs: List (MySub msg)}
 
 init : Task Never (State msg)
-init = Task.succeed (State 0 Dict.empty [])
+init = Task.succeed (State Dict.empty [])
 
 onEffects : Platform.Router msg Msg -> List (MyCmd msg) -> List (MySub msg) -> State msg -> Task Never (State msg)
-onEffects router cmdLst subs { nextId, callStack } =
+onEffects router cmdLst subs { callStack } =
     case cmdLst of
-        [] -> Task.succeed (State nextId callStack subs)
+        [] -> Task.succeed (State callStack subs)
 
-        (AddCall task) :: cmds -> onEffects router cmds subs (State (nextId + 1) (Dict.insert nextId task callStack) subs)
+        (AddProcedure (RP identifier procedure)) :: cmds -> onEffects router cmds subs (State (Debug.log "callstack" (Dict.insert identifier procedure callStack)) subs)
 
-        (Call identifier request) :: cmds ->
-          let maybeTask = Dict.get identifier callStack
-          in (case maybeTask of
-            Just task -> task
+        (Call identifier arguments request) :: cmds ->
+          let maybePc = Dict.get identifier callStack
+          in (case maybePc of
+            Just pc -> case pc of
+              P0 task  -> task
               `andThen` (\value ->  Platform.sendToSelf router (CallComplete request "" (Just value)))
               `onError` (\err ->    Platform.sendToSelf router (CallComplete request "Remote procedure failed" Nothing))
+              _ -> Platform.sendToSelf router (CallComplete request "TODO - not supported yet" Nothing)
+              -- PC1 a m1  ->
+              -- PC2 a b m2  ->
+              -- PC3 a b c m3  ->
+              -- PC4 a b c d m4  ->
+              -- PC5 a b c d e m5  ->
+              -- PC6 a b c d e f m6  ->
+              -- PC7 a b c d e f g m7 ->
             _ ->                    Platform.sendToSelf router (CallComplete request "No procedure found for identifier" Nothing))
 
-            `andThen` \_ -> onEffects router cmds subs (State nextId callStack subs)
+            `andThen` \_ -> onEffects router cmds subs (State callStack subs)
 
 
 -- HANDLE SELF MESSAGES

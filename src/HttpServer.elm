@@ -2,6 +2,8 @@ effect module HttpServer where { command = MyCmd, subscription = MySub } exposin
   ( reply
   , replyFile
   , getPath
+  , getMethod
+  , getBody
   , listen
   , Request
   )
@@ -52,6 +54,11 @@ replyFile request filename =
 getPath : Request -> String
 getPath request = Http.getPath request
 
+getMethod : Request -> String
+getMethod request = Http.getMethod request
+
+getBody : Request -> Value
+getBody request = Http.getBody request
 
 cmdMap : (a -> b) -> MyCmd a -> MyCmd b
 cmdMap _ cmd = case cmd of

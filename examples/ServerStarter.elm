@@ -5,8 +5,9 @@ import Main
 
 main : Program Never
 main =
-    Multitier.program Server
+    Multitier.program OnServer
         { config = Main.config
+        , procedures = Main.procedures
         , init = Main.init
         , view = Main.view
         , update = Main.update
