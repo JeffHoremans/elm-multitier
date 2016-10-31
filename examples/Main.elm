@@ -21,12 +21,11 @@ config = { httpPort = 8081
          , clientFile = Just "examples/index.html" }
 
 procedures : List RemoteProcedure
-procedures = [ rp0 test, rp1 test2]
+procedures = [ rp0 test, rp1 test2, rp1 log]
 
 init : ( Model, MultitierCmd Msg)
 init = Model "" [] "" !! [
-                          dupValServer0
-                          --logOnServer "Message from browser"
+                          logServer "derpiederp"
                          ]
 
 type Msg = Input String | Send | HandleError Error | HandleSuccess String |
@@ -36,7 +35,7 @@ update : Msg -> Model -> ( Model, MultitierCmd Msg )
 update msg model =
     case msg of
       Input text -> ({ model | input = text}, none)
-      Send -> ({ model | input = "" }, dupValClient model.input)
+      Send -> ({ model | input = "" }, dupValServer1 model.input)
       HandleError err -> ({ model | error = "error"}, none)
       HandleSuccess val -> { model | messages = val :: model.messages } !! [none]
 

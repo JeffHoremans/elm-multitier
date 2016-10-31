@@ -19,12 +19,13 @@ import Html.App as App
 import Html exposing (Html)
 import Task exposing (Task, andThen)
 import Http
--- import Exts.Http
+import Exts.Http
 import Json.Encode as Encode exposing (Value)
 import Json.Decode as Decode exposing (Decoder, object2, (:=))
 import String
 
 import HttpServer
+import HttpServer.Utils exposing (Method(..))
 import Multitier.Error exposing (Error(..))
 import Multitier.Callstack as Callstack
 import Multitier.Procedure exposing (..)
@@ -129,11 +130,11 @@ unbatch ptype config mtcmd =
       OnServer -> Cmd.none
       OnClient -> Task.perform onError onSucceed
         ((
-            Http.get decodeResponse ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/call/" ++ identifier)
-            -- Exts.Http.postJson
-            --   decodeResponse
-            --   ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/call/" ++ identifier)
-            --   (Http.string (Encode.encode 4 (encodePostData (PostData identifier arguments))))
+            -- Http.get decodeResponse ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/call/" ++ identifier)
+            Exts.Http.postJson
+              decodeResponse
+              ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/call/" ++ identifier)
+              (Http.string (Encode.encode 4 (encodePostData (PostData identifier arguments))))
           |> Task.mapError (\err -> NetworkError err))
             `andThen` \response -> case response.data of
               Just data -> Task.succeed data
@@ -220,20 +221,22 @@ programWithFlags ptype stuff = case ptype of
 
 handle : Config -> HttpServer.Request -> model -> (model, Cmd msg)
 handle { clientFile } request model =
-  let pathList = List.filter (not << String.isEmpty) (String.split "/" ((HttpServer.getPath request)))
-      method = HttpServer.getMethod request
-      invalidRequest = (model, HttpServer.reply request (encodeResponse (Response Nothing "Invalid request")))
-  in case method of
-    "GET" -> case pathList of
+  let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
+      invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
+  in case request.method of
+    GET -> case pathList of
       [] -> case clientFile of
         Just filename -> (model, HttpServer.replyFile request filename)
-        _ -> invalidRequest
+        _ -> invalidRequest "Invalid request"
 
       [ "call", identifier ] -> (model, Callstack.callProcedure identifier A0 request)
 
-      _ -> invalidRequest
-    "POST" -> let body = (Debug.log "body" (HttpServer.getBody request)) in invalidRequest
-    _ -> invalidRequest
+      _ -> invalidRequest "Invalid request"
+    POST -> let res = Decode.decodeString decodePostData request.body
+      in case res of
+        Ok result -> (model, Callstack.callProcedure result.identifier result.arguments request)
+        Err err -> invalidRequest "Malformed body"
+    _ -> invalidRequest "Invalid request"
 
 updateHelp : (a -> b) -> (model, Cmd a) -> (model, Cmd b)
 updateHelp func (model, cmds) =

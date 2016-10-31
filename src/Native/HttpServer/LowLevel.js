@@ -21,11 +21,24 @@ var _JeffHoremans$elm_multitier$Native_HttpServer_LowLevel = function() {
           });
 
           server.on('request', function (req, res) {
-            var request = {
+            var fullBody = '';
+            var rawRequest = {
               request: req,
               response: res
             };
-            Scheduler.rawSpawn(settings.onRequest(request));
+
+
+            req.on('data', function(chunk) {
+               fullBody += chunk.toString();
+            });
+
+            req.on('end', function() {
+              var request = { method: { ctor: req.method }
+                            , path: url.parse(req.url).path
+                            , body: fullBody
+                            , rawRequest: rawRequest }
+              Scheduler.rawSpawn(settings.onRequest(request));
+            });
           });
 
           server.on('close', function () {
@@ -43,7 +56,7 @@ var _JeffHoremans$elm_multitier$Native_HttpServer_LowLevel = function() {
 
       var reply = function(request, string) {
         return Scheduler.nativeBinding(function (callback) {
-          request.response.end(string);
+          request.rawRequest.response.end(string);
 
           callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         });
@@ -54,28 +67,16 @@ var _JeffHoremans$elm_multitier$Native_HttpServer_LowLevel = function() {
 
           fs.readFile(filename,function (err, data){
             if(err) {
-              request.response.end()
+              request.rawRequest.response.end()
               callback(Scheduler.fail(Utils.Tuple0));
             } else {
               // res.writeHead(200, {'Content-Type': 'text/html','Content-Length':data.length});
-              request.response.write(data);
-              request.response.end();
+              request.rawRequest.response.write(data);
+              request.rawRequest.response.end();
               callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
             }
           });
         })
-      }
-
-      var getPath = function(req) {
-        return url.parse(req.request.url).path;
-      }
-
-      var getMethod = function(req) {
-        return req.request.method;
-      }
-
-      var getBody = function(req) {
-        return req.body;
       }
 
       var close = function(server) {
@@ -91,9 +92,6 @@ var _JeffHoremans$elm_multitier$Native_HttpServer_LowLevel = function() {
         listen: F2(listen),
         reply: F2(reply),
         replyFile: F2(replyFile),
-        getPath: getPath,
-        getMethod: getMethod,
-        getBody: getBody,
         close: close
       };
   } else {
@@ -116,18 +114,6 @@ var _JeffHoremans$elm_multitier$Native_HttpServer_LowLevel = function() {
         });
       }
 
-      var getPath = function(req) {
-        return ""
-      }
-
-      var getMethod = function(req) {
-        return ""
-      }
-
-      var getBody = function(req) {
-        return ""
-      }
-
       var close = function(server) {
         return Scheduler.nativeBinding(function(callback) {
           return callback(Scheduler.fail(Utils.Tuple0));
@@ -138,7 +124,6 @@ var _JeffHoremans$elm_multitier$Native_HttpServer_LowLevel = function() {
         listen: F2(listen),
         reply: F2(reply),
         replyFile: F2(replyFile),
-        getPath : getPath,
         close: close
       };
 

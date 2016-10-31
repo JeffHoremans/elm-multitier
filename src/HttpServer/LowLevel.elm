@@ -3,20 +3,28 @@ module HttpServer.LowLevel exposing
   , Settings
   , reply
   , replyFile
-  , getPath
-  , getMethod
-  , getBody
   , close
   , Server
   , Request
   )
 
-import Native.HttpServer.LowLevel
+
 import Task exposing (Task)
 import Json.Encode as Encode exposing (Value)
 
+import Native.HttpServer.LowLevel
+import HttpServer.Utils exposing (Method)
+
+
 type Server = Server
-type Request = Request
+
+type alias Request = { method: Method
+                     , path: String
+                     , body: String
+                     , rawRequest: RawRequest }
+
+
+type RawRequest = RawRequest
 
 listen : Int -> Settings -> Task x Server
 listen portNumber settings =
@@ -35,15 +43,15 @@ reply request value =
 replyFile : Request -> String -> Task x ()
 replyFile request filename =
   Native.HttpServer.LowLevel.replyFile request filename
-
-getPath : Request -> String
-getPath = Native.HttpServer.LowLevel.getPath
-
-getMethod : Request -> String
-getMethod = Native.HttpServer.LowLevel.getMethod
-
-getBody : Request -> Value
-getBody = Native.HttpServer.LowLevel.getBody
+--
+-- getPath : Request -> String
+-- getPath = Native.HttpServer.LowLevel.getPath
+--
+-- getMethod : Request -> String
+-- getMethod = Native.HttpServer.LowLevel.getMethod
+--
+-- getBody : Request -> Value
+-- getBody = Native.HttpServer.LowLevel.getBody
 
 close : Server -> Task x ()
 close = Native.HttpServer.LowLevel.close

@@ -1,9 +1,6 @@
 effect module HttpServer where { command = MyCmd, subscription = MySub } exposing
   ( reply
   , replyFile
-  , getPath
-  , getMethod
-  , getBody
   , listen
   , Request
   )
@@ -20,6 +17,7 @@ import HttpServer.LowLevel as Http
 -- type alias Server = Http.Server
 
 type alias Request = Http.Request
+
 
 -- type alias Request =
 --   { process : Process.Id
@@ -50,15 +48,6 @@ reply request message =
 replyFile : Request -> String -> Cmd msg
 replyFile request filename =
   command (ReplyFile request filename)
-
-getPath : Request -> String
-getPath request = Http.getPath request
-
-getMethod : Request -> String
-getMethod request = Http.getMethod request
-
-getBody : Request -> Value
-getBody request = Http.getBody request
 
 cmdMap : (a -> b) -> MyCmd a -> MyCmd b
 cmdMap _ cmd = case cmd of
