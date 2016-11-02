@@ -1,74 +1,91 @@
 module Main exposing (..)
 
 import Html exposing (..)
+import Html.App as App
 import Html.Events as E
 import Html.Attributes
 import Task exposing (Task)
+import Json.Encode as Encode exposing (Value, object)
+import Json.Decode as Decode exposing (Decoder, (:=), andThen)
 
-import Multitier exposing (MultitierCmd(..), Config, none, batch, map, (!!))
-import Multitier.Procedure exposing (Procedure0, Procedure1, RemoteProcedure, procedure0, procedure1, rp0, rp1)
+import Multitier exposing (MultitierCmd(..), Config, none, batch, performOnServer, map, (!!))
+import Multitier.Procedure as Proc exposing (remoteProcedure, RemoteProcedure)
 import Multitier.Error exposing (Error(..))
-import Multitier.Type exposing (string)
-
+import Multitier.Type  exposing (Type, string, void)
 import Server.Console as Console
 
-type alias Model = { input: String, messages: List String, error: String }
+import Counter
 
+-- MULTITIER - CONFIG
 
 config: Config
 config = { httpPort = 8081
          , hostname = "localhost"
          , clientFile = Just "examples/index.html" }
 
-procedures : List RemoteProcedure
-procedures = [ rp0 test, rp1 test2, rp1 log]
+-- MULTITIER - PROCEDURES
 
-init : ( Model, MultitierCmd Msg)
-init = Model "" [] "" !! [
-                          logServer "derpiederp"
-                         ]
+type Procedure = DupVal String | Log String | CounterProc Counter.Procedure
+
+procedures : Procedure -> RemoteProcedure Msg
+procedures proc = case proc of
+  DupVal val -> remoteProcedure HandleError HandleSuccess string (dupVal val)
+  Log val -> remoteProcedure HandleError (always None) void (Console.log val)
+  CounterProc proc -> Proc.map CounterMsg (Counter.procedures proc)
+
+coder : Type Procedure
+coder = (decodeProcedure,encodeProcedure)
+
+decodeProcedure : Decoder Procedure
+decodeProcedure =
+  ("type" := Decode.string) `andThen` (\procType ->
+    case procType of
+      "dupVal" ->   Decode.object1 DupVal ("val" := Decode.string)
+      "log" ->      Decode.object1 Log ("val" := Decode.string)
+      "counter" ->  Decode.object1 CounterProc ("proc" := Counter.decodeProcedure)
+      _ ->          Decode.fail (procType ++ " is not a recognized type"))
+
+encodeProcedure : Procedure -> Value
+encodeProcedure proc = case proc of
+  DupVal val ->       Encode.object [ ("type", Encode.string "dupVal"), ("val",  Encode.string val) ]
+  Log val ->          Encode.object [ ("type", Encode.string "log"), ("val",  Encode.string val) ]
+  CounterProc proc -> Encode.object [ ("type", Encode.string "counter"), ("proc", Counter.encodeProcedure proc) ]
+
+dupVal : String -> Task x String
+dupVal val = Task.succeed (val ++ val)
+
+-- MODEL
+
+type alias Model = { input: String
+                   , messages: List String
+                   , error: String
+                   , counter: Counter.Model }
+
+init : ( Model, MultitierCmd Procedure Msg)
+init = let (counter, cmds) = Counter.init
+       in (Model "" [] "" counter,  batch [ map CounterProc CounterMsg cmds ])
 
 type Msg = Input String | Send | HandleError Error | HandleSuccess String |
+           CounterMsg Counter.Msg |
            None
 
-update : Msg -> Model -> ( Model, MultitierCmd Msg )
+update : Msg -> Model -> ( Model, MultitierCmd Procedure Msg )
 update msg model =
     case msg of
       Input text -> ({ model | input = text}, none)
-      Send -> ({ model | input = "" }, dupValServer1 model.input)
+      Send -> { model | input = "" } !! [performOnServer (Log model.input), performOnServer (DupVal model.input)]
       HandleError err -> ({ model | error = "error"}, none)
-      HandleSuccess val -> { model | messages = val :: model.messages } !! [none]
+      HandleSuccess val -> { model | messages = val :: model.messages } !! []
+
+      CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter
+                           in { model | counter = counter } !! [ map CounterProc CounterMsg cmds ]
 
       None -> ( model, none )
-
-dupVal : String -> Task x String
-dupVal val = Task.succeed(val ++ val)
-
-test : Procedure0 Msg
-test = procedure0 "test" HandleError HandleSuccess string (dupVal "test")
-
-test2 : Procedure1 String Msg
-test2 = procedure1 "test2" HandleError HandleSuccess string string dupVal
-
-dupValServer0 : MultitierCmd Msg
-dupValServer0 = Multitier.performOnServer0 test
-
-dupValServer1 : String -> MultitierCmd Msg
-dupValServer1 val = Multitier.performOnServer1 test2 val
-
-dupValClient : String -> MultitierCmd Msg
-dupValClient val = Multitier.performOnClient (Task.perform HandleError HandleSuccess (dupVal val))
-
-log : Procedure1 String Msg
-log = Console.log "log" HandleError (\_ -> HandleSuccess "success")
-
-logServer : String -> MultitierCmd Msg
-logServer val = Multitier.performOnServer1 log val
 
 -- SUBSCRIPTIONS
 
 subscriptions : Model -> Sub Msg
-subscriptions model = Sub.none
+subscriptions model = Sub.batch [Sub.map CounterMsg (Counter.subscriptions model.counter)]
 
 -- VIEW
 
@@ -83,4 +100,5 @@ view model =
     Html.div [] [
       Html.text (toString model.messages),
       Html.br [] [],
-      Html.text ("Error: " ++ model.error)]]
+      Html.text model.error],
+    Html.div [] [App.map CounterMsg (Counter.view model.counter)]]
