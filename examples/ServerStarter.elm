@@ -7,6 +7,7 @@ main : Program Never
 main =
     Multitier.program OnServer
         { config = Main.config
+        , coder = Main.coder
         , procedures = Main.procedures
         , init = Main.init
         , view = Main.view
