@@ -6,3 +6,16 @@ Version 1
 - Remote procedures are only registered when defined at compile time
   --> need for sending arguments at runtime
 - No server state yet
+
+Version 2
+----------
+- Redesign of procedures
+- Every module now needs to define its own Procedure type and a mapping function that maps those procedure types to remote procedure.
+  Procedures of submodules are mapped and batched together so that the program uses one single mapping function and procedure type.
+  A remote procedure is a type containing all what is needed for a client or server to handle server commands.
+  To perform a server command only requires a procedure, which contains all argument data. Both client and server use the mapping
+  function to get the data they require for the specific procedure. The client needs handlers for success and error scenarios when
+  it wraps the command to a server request, and the server needs the actual task to execute. The mapping function handles applying the
+  arguments contained in the given procedure to get that task.
+- An encoder and a decoder is required for the procedure type and this has to be done with care so that every procedure is encoded and
+  decoded correctly and uniquely. Sub-procedures need to be mapped in the same regard.
