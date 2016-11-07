@@ -7,7 +7,7 @@ main : Program Never
 main =
     Multitier.program OnClient
         { config = Main.config
-        , coder = Main.coder
+        , codec = Main.codec
         , procedures = Main.procedures
         , init = Main.init
         , view = Main.view

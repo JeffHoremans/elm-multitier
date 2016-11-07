@@ -33,8 +33,8 @@ procedures proc = case proc of
   Log val -> remoteProcedure HandleError (always None) void (Console.log val)
   CounterProc proc -> Proc.map CounterMsg (Counter.procedures proc)
 
-coder : Type Procedure
-coder = (decodeProcedure,encodeProcedure)
+codec : Type Procedure
+codec = (decodeProcedure,encodeProcedure)
 
 decodeProcedure : Decoder Procedure
 decodeProcedure =

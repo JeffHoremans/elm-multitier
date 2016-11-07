@@ -117,7 +117,7 @@ unwrapInit :
   -> (procedure -> RemoteProcedure msg)
   -> ( model, MultitierCmd procedure msg)
   -> ( model, Cmd msg )
-unwrapInit ptype config coder procedures ( model, cmds) = (model, unbatch ptype config coder procedures cmds)
+unwrapInit ptype config codec procedures ( model, cmds) = (model, unbatch ptype config codec procedures cmds)
 
 unwrapInitWithFlags :
      ProgramType
@@ -126,10 +126,10 @@ unwrapInitWithFlags :
   -> (procedure -> RemoteProcedure msg)
   -> ( flags -> ( model, MultitierCmd procedure msg ))
   -> ( flags -> ( model, Cmd msg ))
-unwrapInitWithFlags ptype config coder procedures init =
+unwrapInitWithFlags ptype config codec procedures init =
   \flags ->
     let ( model, cmds) = init flags
-    in  ( model, unbatch ptype config coder procedures cmds)
+    in  ( model, unbatch ptype config codec procedures cmds)
 
 unwrapUpdate :
      ProgramType
@@ -138,15 +138,15 @@ unwrapUpdate :
   -> (procedure -> RemoteProcedure msg)
   -> (msg -> model -> ( model, MultitierCmd procedure msg ))
   -> (msg -> model -> ( model, Cmd msg ))
-unwrapUpdate ptype config coder procedures update =
+unwrapUpdate ptype config codec procedures update =
   \msg model ->
     let (newModel, cmds) = update msg model
-    in  (newModel, unbatch ptype config coder procedures cmds)
+    in  (newModel, unbatch ptype config codec procedures cmds)
 
 programWithFlags :
        ProgramType
     -> { config: Config
-       , coder: Type procedure
+       , codec: Type procedure
        , procedures: procedure -> RemoteProcedure msg
        , init : flags -> ( model, MultitierCmd procedure msg )
        , update : msg -> model -> ( model, MultitierCmd procedure msg )
@@ -156,22 +156,22 @@ programWithFlags :
     -> Program flags
 programWithFlags ptype stuff = case ptype of
   OnClient -> App.programWithFlags
-        { init = unwrapInitWithFlags OnClient stuff.config stuff.coder stuff.procedures stuff.init
-        , update = unwrapUpdate OnClient stuff.config stuff.coder stuff.procedures stuff.update
+        { init = unwrapInitWithFlags OnClient stuff.config stuff.codec stuff.procedures stuff.init
+        , update = unwrapUpdate OnClient stuff.config stuff.codec stuff.procedures stuff.update
         , subscriptions = stuff.subscriptions
         , view = stuff.view
         }
-  OnServer -> let update = unwrapUpdate OnServer stuff.config stuff.coder stuff.procedures stuff.update
+  OnServer -> let update = unwrapUpdate OnServer stuff.config stuff.codec stuff.procedures stuff.update
             in let wrapUpdate msg model =
                     case msg of
                       UserMsg userMsg -> updateHelp UserMsg <| update userMsg model
-                      Request request -> handle stuff.config stuff.coder stuff.procedures request model
+                      Request request -> handle stuff.config stuff.codec stuff.procedures request model
                       Reply request message data -> updateHelp UserMsg <| (model, HttpServer.reply request (encodeResponse (Response data message)))
                    wrapSubscriptions model = Sub.batch
                     [ HttpServer.listen stuff.config.httpPort Request, Sub.map UserMsg (stuff.subscriptions model)]
                    wrapView model =
                      App.map UserMsg (stuff.view model)
-                   wrapInit flags = updateHelp UserMsg ((unwrapInitWithFlags OnServer stuff.config stuff.coder stuff.procedures stuff.init) flags)
+                   wrapInit flags = updateHelp UserMsg ((unwrapInitWithFlags OnServer stuff.config stuff.codec stuff.procedures stuff.init) flags)
     in App.programWithFlags
           { init = wrapInit
           , update = wrapUpdate
@@ -207,7 +207,7 @@ updateHelp func (model, cmds) =
 program :
        ProgramType
     -> { config: Config
-       , coder: Type procedure
+       , codec: Type procedure
        , procedures: procedure -> RemoteProcedure msg
        , init : ( model, MultitierCmd procedure msg )
        , update : msg -> model -> ( model, MultitierCmd procedure msg )
@@ -215,10 +215,10 @@ program :
        , view : model -> Html msg
        }
     -> Program Never
-program ptype { config, coder, procedures, init, update, subscriptions, view } =
+program ptype { config, codec, procedures, init, update, subscriptions, view } =
     programWithFlags ptype
         { config = config
-        , coder = coder
+        , codec = codec
         , procedures = procedures
         , init = \_ -> init
         , update = update
