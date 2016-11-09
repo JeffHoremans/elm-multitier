@@ -4,10 +4,13 @@ module Multitier.Type exposing
   , int
   , bool
   , float
-  , void)
+  , void
+  , list
+  , array)
 
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
+import Array exposing (Array)
 
 encodeVoid : (() -> Value)
 encodeVoid = always Encode.null
@@ -31,3 +34,9 @@ float = (Decode.float, Encode.float)
 
 void : Type ()
 void = (decodeVoid, encodeVoid)
+
+list : Type a -> Type (List a)
+list (decode,encode) = (Decode.list decode, (\list -> Encode.list (List.map encode list)))
+
+array : Type a -> Type (Array a)
+array (decode, encode) = (Decode.array decode, (\array -> Encode.array (Array.map encode array)))

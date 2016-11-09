@@ -8,7 +8,8 @@ main =
     Multitier.program OnServer
         { config = Main.config
         , codec = Main.codec
-        , procedures = Main.procedures
+        , initServer = Main.initServer
+        , updateServer = Main.updateServer
         , init = Main.init
         , view = Main.view
         , update = Main.update

@@ -16,11 +16,16 @@ type alias Model = { value: Int, error: String }
 
 -- MULTITIER - PROCEDURES
 
+type alias ServerModel = { test: String }
+
+initServer : ServerModel
+initServer = ServerModel ""
+
 type Procedure = Add Int Int
 
-procedures : Procedure -> RemoteProcedure Msg
-procedures proc = case proc of
-  Add a b -> remoteProcedure HandleError HandleSuccess int (add a b)
+updateServer : Procedure -> ServerModel -> (ServerModel, RemoteProcedure Msg)
+updateServer proc model = case proc of
+  Add a b -> (model, remoteProcedure HandleError HandleSuccess int (add a b))
 
 decodeProcedure : Decoder Procedure
 decodeProcedure =
