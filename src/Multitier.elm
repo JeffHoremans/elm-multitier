@@ -85,9 +85,9 @@ toJSON proc = Native.Multitier.toJSON proc |> Result.formatError (\err -> Multit
 
 fromJSON : String -> Result Error procedure
 fromJSON val = Native.Multitier.fromJSON val  |> Result.formatError (\err -> MultitierError err)
-
-toUrl : procedure -> String
-toUrl proc = String.join "/" (String.split " " (toString proc))
+-- 
+-- toUrl : procedure -> String
+-- toUrl proc = String.join "/" (String.split " " (toString proc))
 
 unbatch : Config -> (procedure -> RemoteProcedure msg) -> MultitierCmd procedure msg -> Cmd msg
 unbatch config procedures mtcmd =

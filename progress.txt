@@ -1,11 +1,12 @@
-Version 1
-------------
-- Multi-tier commands wrap server and client commands which are unwrapped by the program methods for server and client.
-- Configuration for server, including hostname, port and the ability to host the client file
-- Basic remote procedure support
-- Remote procedures are only registered when defined at compile time
-  --> need for sending arguments at runtime
-- No server state yet
+Version 3
+----------
+- Added server state: an additional initServer method is needed for initializing server state per module.
+  The procedures mapping function was renamed to updateServer which now also takes the serverModel and returns
+  a tuple containing the new serverModel and the remoteprocedure data structure from before.
+- The decoder and encoder that the user needed to provide to encode and decode his procedures has been removed.
+  As the data being sent is always Elm data, we can safely use the native JSON stringify and parse methods to automatically
+  encode and decode procedure data.
+
 
 Version 2
 ----------
@@ -19,3 +20,12 @@ Version 2
   arguments contained in the given procedure to get that task.
 - An encoder and a decoder is required for the procedure type and this has to be done with care so that every procedure is encoded and
   decoded correctly and uniquely. Sub-procedures need to be mapped in the same regard.
+
+Version 1
+----------
+- Multi-tier commands wrap server and client commands which are unwrapped by the program methods for server and client.
+- Configuration for server, including hostname, port and the ability to host the client file
+- Basic remote procedure support
+- Remote procedures are only registered when defined at compile time
+  --> need for sending arguments at runtime
+- No server state yet
