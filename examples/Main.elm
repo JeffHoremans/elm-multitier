@@ -5,8 +5,6 @@ import Html.App as App
 import Html.Events as E
 import Html.Attributes
 import Task exposing (Task)
-import Json.Encode as Encode exposing (Value, object)
-import Json.Decode as Decode exposing (Decoder, (:=), andThen)
 import Time exposing (Time, second)
 
 import Multitier exposing (MultitierCmd(..), Config, none, batch, performOnServer, map, (!!))
@@ -32,11 +30,7 @@ type alias ServerModel = { messages: List String
 initServer : ServerModel
 initServer = ServerModel [] Counter.initServer
 
-type Procedure = DupVal String | Log String |
-
-                 GetMessages | SendMessage String |
-
-                 CounterProc Counter.Procedure
+type Procedure = DupVal String | Log String | GetMessages | SendMessage String | CounterProc Counter.Procedure
 
 updateServer : Procedure -> ServerModel -> (ServerModel, RemoteProcedure Msg)
 updateServer proc model = case proc of
@@ -47,28 +41,6 @@ updateServer proc model = case proc of
   GetMessages -> (model, remoteProcedure HandleError SetMessages (list string) (Task.succeed model.messages))
   SendMessage message -> let newMessages = message :: model.messages
     in ({ model | messages = newMessages }, remoteProcedure HandleError SetMessages (list string) (Task.succeed newMessages))
-
-codec : Type Procedure
-codec = (decodeProcedure,encodeProcedure)
-
-decodeProcedure : Decoder Procedure
-decodeProcedure =
-  ("type" := Decode.string) `andThen` (\procType ->
-    case procType of
-      "dupVal" ->       Decode.object1 DupVal ("val" := Decode.string)
-      "log" ->          Decode.object1 Log ("val" := Decode.string)
-      "getMessages" ->  Decode.succeed GetMessages
-      "sendMessage" ->  Decode.object1 SendMessage ("message" := Decode.string)
-      "counter" ->      Decode.object1 CounterProc ("proc" := Counter.decodeProcedure)
-      _ ->              Decode.fail (procType ++ " is not a recognized type"))
-
-encodeProcedure : Procedure -> Value
-encodeProcedure proc = case proc of
-  DupVal val ->           Encode.object [ ("type", Encode.string "dupVal"), ("val",  Encode.string val) ]
-  Log val ->              Encode.object [ ("type", Encode.string "log"), ("val",  Encode.string val) ]
-  GetMessages ->          Encode.object [ ("type", Encode.string "getMessages") ]
-  SendMessage message ->  Encode.object [ ("type", Encode.string "sendMessage"), ("message",  Encode.string message) ]
-  CounterProc proc ->     Encode.object [ ("type", Encode.string "counter"), ("proc", Counter.encodeProcedure proc) ]
 
 dupVal : String -> Task x String
 dupVal val = Task.succeed (val ++ val)
@@ -88,10 +60,7 @@ init = let (counter, cmds) = Counter.init
 type Msg = Input String | Send |
            SetMessages (List String) |
            HandleError Error | HandleSuccess String |
-           Tick |
-           CounterMsg Counter.Msg |
-
-           None
+           Tick | CounterMsg Counter.Msg | None
 
 update : Msg -> Model -> ( Model, MultitierCmd Procedure Msg )
 update msg model =

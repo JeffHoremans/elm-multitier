@@ -7,7 +7,6 @@ main : Program Never
 main =
     Multitier.program OnServer
         { config = Main.config
-        , codec = Main.codec
         , initServer = Main.initServer
         , updateServer = Main.updateServer
         , init = Main.init
