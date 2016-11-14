@@ -1,24 +1,28 @@
 var _JeffHoremans$elm_multitier$Native_Multitier = (function() {
 
-  var Ok = _elm_lang$core$Result$Ok
-  var Err = _elm_lang$core$Result$Err
-
   var toJSON = function(x) {
       try {
+        console.log("toJSON")
+        console.log(x)
         var object = x
         JSON.stringify(object)
-        return Ok(object);
+        return object;
       } catch (err) {
-        return Err(err.message)
+        throw new Error("Report this issue, this should never happen! Failed to encode Elm data to JSON: " + err.message)
       }
   }
 
   var fromJSON = function(x) {
+      console.log("fromJSON")
+      console.log(x)
       try {
-        var object = JSON.parse(x)
-        return Ok(object);
+        if (typeof(x) === 'string') {
+          return JSON.parse(x);
+        } else {
+          return x;
+        }
       } catch (err) {
-        return Err(err.message);
+        throw new Error("Report this issue, this should never happen! Failed to decode JSON to Elm data: " + err.message)
       }
 
   }

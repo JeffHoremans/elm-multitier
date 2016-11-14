@@ -9,7 +9,6 @@ import Task exposing (Task)
 
 import Multitier exposing (MultitierCmd(..), Config, none, batch, (!!), performOnServer)
 import Multitier.Procedure exposing (RemoteProcedure, remoteProcedure)
-import Multitier.Type exposing (Type, int)
 import Multitier.Error exposing (Error)
 
 type alias Model = { value: Int, error: String }
@@ -25,7 +24,7 @@ type Procedure = Add Int Int
 
 updateServer : Procedure -> ServerModel -> (ServerModel, RemoteProcedure Msg)
 updateServer proc model = case proc of
-  Add a b -> (model, remoteProcedure HandleError HandleSuccess int (add a b))
+  Add a b -> (model, remoteProcedure HandleError HandleSuccess (add a b))
 
 decodeProcedure : Decoder Procedure
 decodeProcedure =

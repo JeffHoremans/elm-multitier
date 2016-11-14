@@ -10,7 +10,6 @@ import Time exposing (Time, second)
 import Multitier exposing (MultitierCmd(..), Config, none, batch, performOnServer, map, (!!))
 import Multitier.Procedure as Proc exposing (remoteProcedure, RemoteProcedure)
 import Multitier.Error exposing (Error(..))
-import Multitier.Type  exposing (Type, string, void, list)
 import Server.Console as Console
 
 import Counter
@@ -34,13 +33,13 @@ type Procedure = DupVal String | Log String | GetMessages | SendMessage String |
 
 updateServer : Procedure -> ServerModel -> (ServerModel, RemoteProcedure Msg)
 updateServer proc model = case proc of
-  DupVal val -> (model, remoteProcedure HandleError HandleSuccess string (dupVal val))
-  Log val -> (model, remoteProcedure HandleError (always None) void (Console.log val))
+  DupVal val -> (model, remoteProcedure HandleError HandleSuccess (dupVal val))
+  Log val -> (model, remoteProcedure HandleError (always None) (Console.log val))
   CounterProc proc -> let (counter, counterProc) = Counter.updateServer proc model.counter
     in ({ model | counter = counter }, Proc.map CounterMsg counterProc)
-  GetMessages -> (model, remoteProcedure HandleError SetMessages (list string) (Task.succeed model.messages))
+  GetMessages -> (model, remoteProcedure HandleError SetMessages (Task.succeed model.messages))
   SendMessage message -> let newMessages = message :: model.messages
-    in ({ model | messages = newMessages }, remoteProcedure HandleError SetMessages (list string) (Task.succeed newMessages))
+    in ({ model | messages = newMessages }, remoteProcedure HandleError SetMessages (Task.succeed newMessages))
 
 dupVal : String -> Task x String
 dupVal val = Task.succeed (val ++ val)
