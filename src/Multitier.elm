@@ -79,13 +79,7 @@ encodeResponse response = Encode.object
 type alias Config = { httpPort: Int
                     , hostname: String
                     , clientFile: Maybe String }
-
-toJSON : procedure -> Result Error Value
-toJSON proc = Native.Multitier.toJSON proc |> Result.formatError (\err -> MultitierError err)
-
-fromJSON : String -> Result Error procedure
-fromJSON val = Native.Multitier.fromJSON val  |> Result.formatError (\err -> MultitierError err)
--- 
+--
 -- toUrl : procedure -> String
 -- toUrl proc = String.join "/" (String.split " " (toString proc))
 
@@ -93,15 +87,13 @@ unbatch : Config -> (procedure -> RemoteProcedure msg) -> MultitierCmd procedure
 unbatch config procedures mtcmd =
   case mtcmd of
     ServerCmd procedure ->
-      let (RP (onError,onSucceed) task) = procedures procedure in
+      let (RP (onError,onSucceed) _) = procedures procedure in
         Task.perform onError onSucceed
-          ((Task.fromResult (toJSON procedure)
-
-            `andThen` (\body -> ((Exts.Http.postJson decodeResponse
+          (((Exts.Http.postJson decodeResponse
               ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/procedure/")
-              (Http.string (Encode.encode 4 body)))
+              (Http.string (Encode.encode 4 (Native.Multitier.toJSON procedure))))
 
-                |> Task.mapError (\err -> NetworkError err))))
+                |> Task.mapError (\err -> NetworkError err))
 
                   `andThen` \response -> case response.data of
                     Just data -> Task.succeed data
@@ -195,11 +187,8 @@ handle { clientFile } updateServer request model =
 
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
-      ["procedure"] -> let r = fromJSON request.body in
-        case r of
-          Ok result -> let (newModel, (RP _ task)) = updateServer result model
-            in (newModel, Task.perform (\err -> Reply request "Procedure failed" Nothing) (\value -> Reply request "" (Just value)) task)
-          Err err -> invalidRequest ("Malformed body") -- TODO decode/encode Error
+      ["procedure"] -> let (newModel, (RP _ task)) = updateServer (Native.Multitier.fromJSON request.body) model in
+        (newModel, Task.perform (\err -> Reply request "Procedure failed" Nothing) (\value -> Reply request "" (Just value)) task)
       _ -> invalidRequest "Invalid request"
     _ -> invalidRequest "Invalid request"
 
