@@ -1,3 +1,15 @@
+Version 4
+----------
+- Removed redundant encoding and decoding of the return type of remote procedures. This is now automatically done by also
+  using the JSON stringify and parse methods that were introduced in the previous version.
+- Refactored the updateServer method which contained a possible server model leak (using the handlers). The RemoteProcedure datatype now contains
+  instead of the handlers and the task to complete, the same handlers and now a function from a serverModel to a tupel of
+  a new, updated serverModel and the task to complete. This way, the handlers have no access to the serverModel. The ServerModel is inserted when the
+  task is needed by the Multitier framework.
+- Added support for server-only messages/updates.
+- Still todo: resolving a bug in the httpserver elm code + refactoring error handling over the network + optimizing API
+
+
 Version 3
 ----------
 - Added server state: an additional initServer method is needed for initializing server state per module.
