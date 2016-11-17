@@ -31,19 +31,14 @@ initServer = ServerModel [] Counter.initServer
 
 type Procedure = DupVal String | Log String | GetMessages | SendMessage String | CounterProc Counter.Procedure
 
-updateServer : Procedure -> ServerModel -> (ServerModel, RemoteProcedure Msg)
-updateServer proc model = case proc of
-  DupVal val -> (model, remoteProcedure HandleError HandleSuccess (dupVal val))
-  Log val -> (model, remoteProcedure HandleError (always None) (Console.log val))
-  CounterProc proc -> let (counter, counterProc) = Counter.updateServer proc model.counter
-    in ({ model | counter = counter }, Proc.map CounterMsg counterProc)
-  GetMessages -> (model, remoteProcedure HandleError SetMessages (Task.succeed model.messages))
-  SendMessage message -> let newMessages = message :: model.messages
-    in ({ model | messages = newMessages }, remoteProcedure HandleError SetMessages (Task.succeed newMessages))
-
-dupVal : String -> Task x String
-dupVal val = Task.succeed (val ++ val)
-
+proceduresMap : Procedure -> RemoteProcedure ServerModel Msg
+proceduresMap proc = case proc of
+  DupVal val ->           remoteProcedure HandleError HandleSuccess (\model -> (model, Task.succeed (val ++ val)))
+  Log val ->              remoteProcedure HandleError (always None) (\model -> (model, Console.log val))
+  GetMessages ->          remoteProcedure HandleError SetMessages   (\model -> (model, Task.succeed model.messages))
+  SendMessage message ->  remoteProcedure HandleError SetMessages   (\model -> let newMessages = message :: model.messages in
+                                                                               ({ model | messages = newMessages }, Task.succeed newMessages))
+  CounterProc proc ->     Proc.map CounterMsg (\counter model -> { model | counter = counter}) (\model -> model.counter) (Counter.proceduresMap proc)
 
 -- MODEL
 
