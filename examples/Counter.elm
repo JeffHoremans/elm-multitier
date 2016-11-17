@@ -22,7 +22,15 @@ type Procedure = Add Int Int
 
 proceduresMap : Procedure -> RemoteProcedure ServerModel Msg
 proceduresMap proc = case proc of
-  Add a b -> remoteProcedure HandleError HandleSuccess (\model -> (model, Task.succeed (a + b)))
+  Add a b -> remoteProcedure HandleError HandleSuccess (\serverModel -> (serverModel, Task.succeed (a + b)))
+
+type ServerMsg = Nothing
+
+updateServer : ServerMsg -> ServerModel -> (ServerModel, Cmd ServerMsg)
+updateServer _ serverModel = serverModel ! []
+
+serverSubscriptions : ServerModel -> Sub ServerMsg
+serverSubscriptions model = Sub.none
 
 -- MODEL
 

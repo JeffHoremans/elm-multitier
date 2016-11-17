@@ -136,7 +136,9 @@ programWithFlags :
        ProgramType
     -> { config: Config
        , initServer: serverModel
-       , proceduresMap : procedure -> RemoteProcedure serverModel msg
+       , procedures : procedure -> RemoteProcedure serverModel msg
+       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
+       , serverSubscriptions : serverModel -> Sub serverMsg
        , init : flags -> ( model, MultitierCmd procedure msg )
        , update : msg -> model -> ( model, MultitierCmd procedure msg )
        , subscriptions : model -> Sub msg
@@ -145,20 +147,20 @@ programWithFlags :
     -> Program flags
 programWithFlags ptype stuff = case ptype of
   OnClient -> App.programWithFlags
-        { init = unwrapInitWithFlags stuff.config stuff.proceduresMap stuff.init
-        , update = unwrapUpdate stuff.config stuff.proceduresMap stuff.update
+        { init = unwrapInitWithFlags stuff.config stuff.procedures stuff.init
+        , update = unwrapUpdate stuff.config stuff.procedures stuff.update
         , subscriptions = stuff.subscriptions
         , view = stuff.view
         }
-  OnServer -> let update = \msg model -> (model, Cmd.none)
+  OnServer -> let update = stuff.updateServer
             in let wrapInit =  \_ -> (stuff.initServer, Cmd.none)
                    wrapUpdate msg model =
                     case msg of
                       UserMsg userMsg -> updateHelp UserMsg <| update userMsg model
-                      Request request -> handle stuff.config stuff.proceduresMap request model
+                      Request request -> handle stuff.config stuff.procedures request model
                       Reply request message data -> updateHelp UserMsg <| (model, HttpServer.reply request (encodeResponse (Response data message)))
                    wrapSubscriptions model =
-                     Sub.batch [ HttpServer.listen stuff.config.httpPort Request]
+                     Sub.batch [ HttpServer.listen stuff.config.httpPort Request, Sub.map UserMsg (stuff.serverSubscriptions stuff.initServer)]
 
     in Worker.programWithFlags (\_ -> Cmd.none) -- TODO command line arguments??
           { init = wrapInit
@@ -166,8 +168,8 @@ programWithFlags ptype stuff = case ptype of
           , subscriptions = wrapSubscriptions
           }
 
-handle : Config -> (procedure -> RemoteProcedure serverModel msg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (MyMsg msg))
-handle { clientFile } proceduresMap request model =
+handle : Config -> (procedure -> RemoteProcedure serverModel msg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (MyMsg serverMsg))
+handle { clientFile } procedures request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
   in case request.method of
@@ -178,7 +180,7 @@ handle { clientFile } proceduresMap request model =
 
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
-      ["procedure"] -> let (RP _ toTask) = proceduresMap (Native.Multitier.fromJSON request.body) in
+      ["procedure"] -> let (RP _ toTask) = procedures (Native.Multitier.fromJSON request.body) in
         let (newModel, task) = toTask model in
           (newModel, Task.perform (\err -> Reply request "Procedure failed" Nothing) (\value -> Reply request "" (Just value)) task)
       _ -> invalidRequest "Invalid request"
@@ -192,18 +194,22 @@ program :
        ProgramType
     -> { config: Config
        , initServer: serverModel
-       , proceduresMap : procedure -> RemoteProcedure serverModel msg
+       , procedures : procedure -> RemoteProcedure serverModel msg
+       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
+       , serverSubscriptions : serverModel -> Sub serverMsg
        , init : ( model, MultitierCmd procedure msg )
        , update : msg -> model -> ( model, MultitierCmd procedure msg )
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        }
     -> Program Never
-program ptype { config, initServer, proceduresMap, init, update, subscriptions, view } =
+program ptype { config, initServer, procedures, updateServer, serverSubscriptions, init, update, subscriptions, view } =
     programWithFlags ptype
         { config = config
         , initServer = initServer
-        , proceduresMap = proceduresMap
+        , procedures = procedures
+        , updateServer = updateServer
+        , serverSubscriptions = serverSubscriptions
         , init = \_ -> init
         , update = update
         , subscriptions = subscriptions

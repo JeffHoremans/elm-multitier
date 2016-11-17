@@ -8,7 +8,9 @@ main =
     Multitier.program OnClient
         { config = Main.config
         , initServer = Main.initServer
-        , proceduresMap = Main.proceduresMap
+        , procedures = Main.procedures
+        , updateServer = Main.updateServer
+        , serverSubscriptions = Main.serverSubscriptions
         , init = Main.init
         , view = Main.view
         , update = Main.update

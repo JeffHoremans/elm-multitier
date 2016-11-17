@@ -31,14 +31,25 @@ initServer = ServerModel [] Counter.initServer
 
 type Procedure = DupVal String | Log String | GetMessages | SendMessage String | CounterProc Counter.Procedure
 
-proceduresMap : Procedure -> RemoteProcedure ServerModel Msg
-proceduresMap proc = case proc of
-  DupVal val ->           remoteProcedure HandleError HandleSuccess (\model -> (model, Task.succeed (val ++ val)))
-  Log val ->              remoteProcedure HandleError (always None) (\model -> (model, Console.log val))
-  GetMessages ->          remoteProcedure HandleError SetMessages   (\model -> (model, Task.succeed model.messages))
-  SendMessage message ->  remoteProcedure HandleError SetMessages   (\model -> let newMessages = message :: model.messages in
-                                                                               ({ model | messages = newMessages }, Task.succeed newMessages))
-  CounterProc proc ->     Proc.map CounterMsg (\counter model -> { model | counter = counter}) (\model -> model.counter) (Counter.proceduresMap proc)
+procedures : Procedure -> RemoteProcedure ServerModel Msg
+procedures proc = case proc of
+  DupVal val ->           remoteProcedure HandleError HandleSuccess (\serverModel -> (serverModel, Task.succeed (val ++ val)))
+  Log val ->              remoteProcedure HandleError (always None) (\serverModel -> (serverModel, Console.log val))
+  GetMessages ->          remoteProcedure HandleError SetMessages   (\serverModel -> (serverModel, Task.succeed serverModel.messages))
+  SendMessage message ->  remoteProcedure HandleError SetMessages   (\serverModel -> let newMessages = message :: serverModel.messages in
+                                                                                     ({ serverModel | messages = newMessages }, Task.succeed newMessages))
+  CounterProc proc ->     Proc.map CounterMsg (\counter serverModel -> { serverModel | counter = counter}) (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
+
+type ServerMsg = ServerTick | CounterServerMsg Counter.ServerMsg | Nothing
+
+updateServer : ServerMsg -> ServerModel -> (ServerModel, Cmd ServerMsg)
+updateServer msg serverModel = case msg of
+  ServerTick -> serverModel ! [Task.perform (always Nothing) (always Nothing) (Console.log (toString serverModel.messages))]
+  CounterServerMsg msg -> let (counter, cmds) = Counter.updateServer msg serverModel.counter in { serverModel | counter = counter} ! [Cmd.map CounterServerMsg cmds]
+  Nothing -> serverModel ! []
+
+serverSubscriptions : ServerModel -> Sub ServerMsg
+serverSubscriptions serverModel = Sub.batch [Time.every 10000 (always ServerTick), Sub.map CounterServerMsg (Counter.serverSubscriptions serverModel.counter)]
 
 -- MODEL
 
