@@ -1,4 +1,4 @@
-var _JeffHoremans$elm_multitier$Native_Multitier = (function() {
+var _JeffHoremans$elm_multitier$Native_Multitier_LowLevel = (function() {
 
   var toJSON = function(x) {
       try {
@@ -12,19 +12,29 @@ var _JeffHoremans$elm_multitier$Native_Multitier = (function() {
 
   var fromJSON = function(x) {
       try {
-        if (typeof(x) === 'string') {
-          return JSON.parse(x);
-        } else {
-          return x;
-        }
+        return x;
       } catch (err) {
         throw new Error("Report this issue, this should never happen! Failed to decode JSON to Elm data: " + err.message)
       }
   }
 
+  var fromJSONString = function(x) {
+      try {
+        return JSON.parse(x);
+      } catch (err) {
+        throw new Error("Report this issue, this should never happen! Failed to decode JSON string to Elm data: " + err.message)
+      }
+  }
+
+  var bootstrapStub = function(x) {
+    return x
+  }
+
   return {
     toJSON: toJSON,
-    fromJSON: fromJSON
+    fromJSON: fromJSON,
+    fromJSONString: fromJSONString,
+    bootstrapStub: bootstrapStub
   };
 
 })();

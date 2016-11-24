@@ -10,7 +10,6 @@ module Multitier
 
            , ProgramType(..)
            , Config
-           , programWithFlags
            , program
            )
 
@@ -24,12 +23,12 @@ import Json.Decode as Decode exposing (Decoder, object2, (:=))
 import String
 import Worker
 
-import Native.Multitier
-
 import HttpServer
 import HttpServer.Utils exposing (Method(..))
 import Multitier.Error exposing (Error(..))
 import Multitier.Procedure exposing (..)
+import Multitier.LowLevel as LowLevel exposing (fromJSON, toJSON, fromJSONString)
+import Server.ReplaceInFile as File
 
 type MultitierCmd procedure msg = ServerCmd procedure | ClientCmd (Cmd msg) | Batch (List (MultitierCmd procedure msg))
 
@@ -77,8 +76,7 @@ encodeResponse response = Encode.object
 
 
 type alias Config = { httpPort: Int
-                    , hostname: String
-                    , clientFile: Maybe String }
+                    , hostname: String }
 
 unbatch : Config -> (procedure -> RemoteProcedure serverModel msg) -> MultitierCmd procedure msg -> Cmd msg
 unbatch config proceduresMap mtcmd =
@@ -88,7 +86,7 @@ unbatch config proceduresMap mtcmd =
         Task.perform onError onSucceed
           (((Exts.Http.postJson decodeResponse
               ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/procedure" )
-              (Http.string (Encode.encode 4 (Native.Multitier.toJSON procedure))))
+              (Http.string (Encode.encode 4 (toJSON procedure))))
 
                 |> Task.mapError (\err -> NetworkError err))
 
@@ -101,7 +99,7 @@ unbatch config proceduresMap mtcmd =
 
 
 
-type MyMsg msg = UserMsg msg | Request HttpServer.Request | Reply HttpServer.Request String (Maybe Value)
+type MyMsg msg = UserMsg msg | Request HttpServer.Request | Reply HttpServer.Request String (Maybe Value) | ReplyFile HttpServer.Request String
 
 unwrapInit :
      Config
@@ -109,16 +107,6 @@ unwrapInit :
   -> ( model, MultitierCmd procedure msg)
   -> ( model, Cmd msg )
 unwrapInit config proceduresMap ( model, cmds) = (model, unbatch config proceduresMap cmds)
-
-unwrapInitWithFlags :
-     Config
-  -> (procedure -> RemoteProcedure serverModel msg)
-  -> ( flags -> ( model, MultitierCmd procedure msg ))
-  -> ( flags -> ( model, Cmd msg ))
-unwrapInitWithFlags config proceduresMap init =
-  \flags ->
-    let ( model, cmds) = init flags
-    in  ( model, unbatch config proceduresMap cmds)
 
 unwrapUpdate :
      Config
@@ -132,55 +120,59 @@ unwrapUpdate config proceduresMap update =
 
 type ProgramType = OnServer | OnClient
 
-programWithFlags :
+program :
        ProgramType
     -> { config: Config
-       , initServer: serverModel
-       , procedures : procedure -> RemoteProcedure serverModel msg
-       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
-       , serverSubscriptions : serverModel -> Sub serverMsg
-       , init : flags -> ( model, MultitierCmd procedure msg )
+       , init : input -> ( model, MultitierCmd procedure msg )
        , update : msg -> model -> ( model, MultitierCmd procedure msg )
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
+       , initServer: serverModel
+       , serverState : serverModel -> input
+       , procedures : procedure -> RemoteProcedure serverModel msg
+       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
+       , serverSubscriptions : serverModel -> Sub serverMsg
        }
-    -> Program flags
-programWithFlags ptype stuff = case ptype of
-  OnClient -> App.programWithFlags
-        { init = unwrapInitWithFlags stuff.config stuff.procedures stuff.init
-        , update = unwrapUpdate stuff.config stuff.procedures stuff.update
-        , subscriptions = stuff.subscriptions
-        , view = stuff.view
-        }
-  OnServer -> let update = stuff.updateServer
-            in let wrapInit =  \_ -> (stuff.initServer, Cmd.none)
+    -> Program Never
+program ptype stuff = case ptype of
+  OnClient -> App.program
+          { init = unwrapInit stuff.config stuff.procedures (stuff.init (stuff.serverState (LowLevel.bootstrapStub stuff.initServer)))
+          , update = unwrapUpdate stuff.config stuff.procedures stuff.update
+          , subscriptions = stuff.subscriptions
+          , view = stuff.view
+          }
+  OnServer ->
+    let update = stuff.updateServer
+            in let wrapInit =  (stuff.initServer, Cmd.none)
                    wrapUpdate msg model =
                     case msg of
                       UserMsg userMsg -> updateHelp UserMsg <| update userMsg model
-                      Request request -> handle stuff.config stuff.procedures request model
+                      Request request -> handle stuff.serverState stuff.procedures request model
                       Reply request message data -> updateHelp UserMsg <| (model, HttpServer.reply request (encodeResponse (Response data message)))
+                      ReplyFile request file ->  updateHelp UserMsg <| (model, HttpServer.replyFile request file)
                    wrapSubscriptions model =
                      Sub.batch [ HttpServer.listen stuff.config.httpPort Request, Sub.map UserMsg (stuff.serverSubscriptions stuff.initServer)]
 
-    in Worker.programWithFlags (\_ -> Cmd.none) -- TODO command line arguments??
+    in Worker.program (\_ -> Cmd.none) -- TODO command line arguments??
           { init = wrapInit
           , update = wrapUpdate
           , subscriptions = wrapSubscriptions
           }
 
-handle : Config -> (procedure -> RemoteProcedure serverModel msg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (MyMsg serverMsg))
-handle { clientFile } procedures request model =
+handle : (serverModel -> input) -> (procedure -> RemoteProcedure serverModel msg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (MyMsg serverMsg))
+handle serverState procedures request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
   in case request.method of
     GET -> case pathList of
-      [] -> case clientFile of
-        Just filename -> (model, HttpServer.replyFile request filename)
-        _ -> invalidRequest "Invalid request"
-
+      [] -> (model, Task.perform (\_ -> Reply request "Invalid request" Nothing)
+                                 (\_ -> ReplyFile request "examples/index.html")
+                                 (File.replace "examples/index.html"
+                                               "_JeffHoremans\\$elm_multitier\\$Multitier_LowLevel\\$bootstrapStub\\s=.*"
+                                               ("_JeffHoremans$elm_multitier$Multitier_LowLevel$" ++ "bootstrapStub =function(x){return "++ (Encode.encode 0 (toJSON model)) ++ "}") False) )
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
-      ["procedure"] -> let (RP _ toTask) = procedures (Native.Multitier.fromJSON request.body) in
+      ["procedure"] -> let (RP _ toTask) = procedures (fromJSONString request.body) in
         let (newModel, task) = toTask model in
           (newModel, Task.perform (\err -> Reply request "Procedure failed" Nothing) (\value -> Reply request "" (Just value)) task)
       _ -> invalidRequest "Invalid request"
@@ -189,29 +181,3 @@ handle { clientFile } procedures request model =
 updateHelp : (a -> b) -> (model, Cmd a) -> (model, Cmd b)
 updateHelp func (model, cmds) =
   (model, Cmd.map func cmds)
-
-program :
-       ProgramType
-    -> { config: Config
-       , initServer: serverModel
-       , procedures : procedure -> RemoteProcedure serverModel msg
-       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
-       , serverSubscriptions : serverModel -> Sub serverMsg
-       , init : ( model, MultitierCmd procedure msg )
-       , update : msg -> model -> ( model, MultitierCmd procedure msg )
-       , subscriptions : model -> Sub msg
-       , view : model -> Html msg
-       }
-    -> Program Never
-program ptype { config, initServer, procedures, updateServer, serverSubscriptions, init, update, subscriptions, view } =
-    programWithFlags ptype
-        { config = config
-        , initServer = initServer
-        , procedures = procedures
-        , updateServer = updateServer
-        , serverSubscriptions = serverSubscriptions
-        , init = \_ -> init
-        , update = update
-        , subscriptions = subscriptions
-        , view = view
-        }

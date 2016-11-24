@@ -18,8 +18,7 @@ import Counter
 
 config: Config
 config = { httpPort = 8081
-         , hostname = "localhost"
-         , clientFile = Just "examples/index.html" }
+         , hostname = "localhost" }
 
 -- MULTITIER - PROCEDURES
 
@@ -51,6 +50,13 @@ updateServer msg serverModel = case msg of
 serverSubscriptions : ServerModel -> Sub ServerMsg
 serverSubscriptions serverModel = Sub.batch [Time.every 10000 (always ServerTick), Sub.map CounterServerMsg (Counter.serverSubscriptions serverModel.counter)]
 
+-- INPUT
+
+type alias Input = { messages: List String }
+
+serverState: ServerModel -> Input
+serverState {messages} = Input messages
+
 -- MODEL
 
 type alias Model = { input: String
@@ -58,11 +64,11 @@ type alias Model = { input: String
                    , error: String
                    , counter: Counter.Model }
 
-init : ( Model, MultitierCmd Procedure Msg)
-init = let (counter, cmds) = Counter.init
-       in (Model "" [] "" counter,  batch [ map CounterProc CounterMsg cmds ])
+init : Input -> ( Model, MultitierCmd Procedure Msg)
+init {messages} = let (counter, cmds) = Counter.init
+       in (Model "" messages "" counter,  batch [ map CounterProc CounterMsg cmds ])
 
-type Msg = Input String | Send |
+type Msg = OnInput String | Send |
            SetMessages (List String) |
            HandleError Error | HandleSuccess String |
            Tick | CounterMsg Counter.Msg | None
@@ -70,7 +76,7 @@ type Msg = Input String | Send |
 update : Msg -> Model -> ( Model, MultitierCmd Procedure Msg )
 update msg model =
     case msg of
-      Input text -> ({ model | input = text}, none)
+      OnInput text -> ({ model | input = text}, none)
       Send -> { model | input = "" } !! [performOnServer (SendMessage model.input)]
       HandleError err -> ({ model | error = "error"}, none)
       HandleSuccess val -> { model | messages = ("Logged succesfully: " ++ val) :: model.messages } !! []
@@ -94,7 +100,7 @@ view model =
   Html.div [] [
     Html.h1 [] [ Html.text "Multitier Elm - Client"],
     Html.div [] [
-    Html.input [E.onInput Input, Html.Attributes.value model.input] [],
+    Html.input [E.onInput OnInput, Html.Attributes.value model.input] [],
     Html.button [E.onClick Send] [text "Send"]
     ],
     Html.div [] [

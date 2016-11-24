@@ -64,18 +64,15 @@ var _JeffHoremans$elm_multitier$Native_HttpServer_LowLevel = function() {
 
       var replyFile = function(request, filename) {
         return Scheduler.nativeBinding(function(callback) {
-
-          fs.readFile(filename,function (err, data){
-            if(err) {
-              request.rawRequest.response.end()
-              callback(Scheduler.fail(Utils.Tuple0));
-            } else {
-              // res.writeHead(200, {'Content-Type': 'text/html','Content-Length':data.length});
-              request.rawRequest.response.write(data);
-              request.rawRequest.response.end();
-              callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
-            }
-          });
+          try {
+            var readStream = fs.createReadStream(filename);
+            readStream.pipe(request.rawRequest.response);
+            callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+          } catch (err) {
+            console.log(err)
+            request.rawRequest.response.end()
+            callback(Scheduler.fail(Utils.Tuple0));
+          }
         })
       }
 

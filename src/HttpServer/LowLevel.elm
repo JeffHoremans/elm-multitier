@@ -43,15 +43,6 @@ reply request value =
 replyFile : Request -> String -> Task x ()
 replyFile request filename =
   Native.HttpServer.LowLevel.replyFile request filename
---
--- getPath : Request -> String
--- getPath = Native.HttpServer.LowLevel.getPath
---
--- getMethod : Request -> String
--- getMethod = Native.HttpServer.LowLevel.getMethod
---
--- getBody : Request -> Value
--- getBody = Native.HttpServer.LowLevel.getBody
 
 close : Server -> Task x ()
 close = Native.HttpServer.LowLevel.close

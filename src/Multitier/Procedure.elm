@@ -7,8 +7,8 @@ module Multitier.Procedure exposing
 import Json.Encode as Encode exposing (Value)
 import Task exposing (Task)
 
-import Native.Multitier
 import Multitier.Error exposing (Error(..))
+import Multitier.LowLevel exposing (toJSON, fromJSON)
 
 type RemoteProcedure serverModel msg = RP (Handlers msg) (serverModel -> (serverModel, Task Error Value))
 
@@ -30,9 +30,3 @@ remoteProcedure onError onSuccess toTask =
       mappedToTask = \serverModel -> let (newServerModel, task) = toTask serverModel
                                      in (newServerModel, Task.map toJSON task)
   in RP (onError,mappedOnSuccess) mappedToTask
-
-toJSON : a -> Value
-toJSON = Native.Multitier.toJSON
-
-fromJSON : Value -> a
-fromJSON = Native.Multitier.fromJSON
