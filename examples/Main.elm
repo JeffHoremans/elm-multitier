@@ -97,6 +97,8 @@ subscriptions model = Sub.batch [Sub.map CounterMsg (Counter.subscriptions model
 
 view : Model -> Html Msg
 view model =
+  Html.body [] [
+  Html.node "link" [Html.Attributes.rel "stylesheet", Html.Attributes.href "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"] [],
   Html.div [] [
     Html.h1 [] [ Html.text "Multitier Elm - Client"],
     Html.div [] [
@@ -107,4 +109,4 @@ view model =
       Html.text (toString model.messages),
       Html.br [] [],
       Html.text model.error],
-    Html.div [] [App.map CounterMsg (Counter.view model.counter)]]
+    Html.div [] [App.map CounterMsg (Counter.view model.counter)]]]

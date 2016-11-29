@@ -15,7 +15,6 @@ var _JeffHoremans$elm_multitier$Native_Server_ReplaceInFile = (function() {
           with: replacement,
           allowEmptyPaths: allowEmptyPaths,
         };
-        console.log(options)
         try {
           rif.sync(options);
           return callback(Scheduler.succeed(Utils.Tuple0));

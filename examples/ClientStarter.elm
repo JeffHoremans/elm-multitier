@@ -1,19 +1,19 @@
 module ClientStarter exposing (..)
 
 import Multitier exposing (ProgramType(..))
-import Main
+import Chat
 
 main : Program Never
 main =
     Multitier.program OnClient
-        { config = Main.config
-        , procedures = Main.procedures
-        , init = Main.init
-        , view = Main.view
-        , update = Main.update
-        , subscriptions = Main.subscriptions
-        , initServer = Main.initServer
-        , serverState = Main.serverState
-        , updateServer = Main.updateServer
-        , serverSubscriptions = Main.serverSubscriptions
+        { config = Chat.config
+        , procedures = Chat.procedures
+        , init = Chat.init
+        , view = Chat.view
+        , update = Chat.update
+        , subscriptions = Chat.subscriptions
+        , initServer = Chat.initServer
+        , serverState = Chat.serverState
+        , updateServer = Chat.updateServer
+        , serverSubscriptions = Chat.serverSubscriptions
         }
