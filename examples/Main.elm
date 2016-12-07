@@ -7,7 +7,7 @@ import Task exposing (Task)
 import Time exposing (Time, second)
 
 import Multitier exposing (MultitierCmd(..), Config, none, batch, performOnServer, map, (!!))
-import Multitier.Procedure as Proc exposing (remoteProcedure, RemoteProcedure)
+import Multitier.Procedure as Procedure exposing (procedure, Procedure)
 import Multitier.Error exposing (Error(..))
 import Server.Console as Console
 
@@ -27,15 +27,15 @@ type alias ServerModel = { messages: List String
 initServer : ServerModel
 initServer = ServerModel [] Counter.initServer
 
-type Procedure = Log String | GetMessages | SendMessage String | CounterProc Counter.Procedure
+type Proc = Log String | GetMessages | SendMessage String | CounterProc Counter.Proc
 
-procedures : Procedure -> RemoteProcedure ServerModel Msg
+procedures : Proc -> Procedure ServerModel Msg
 procedures proc = case proc of
-  Log val ->              remoteProcedure Handle (\serverModel -> (serverModel, Console.log val))
-  GetMessages ->          remoteProcedure SetMessages   (\serverModel -> (serverModel, Task.succeed serverModel.messages))
-  SendMessage message ->  remoteProcedure SetMessages   (\serverModel -> let newMessages = message :: serverModel.messages in
+  Log val ->              procedure Handle        (\serverModel -> (serverModel, Console.log val))
+  GetMessages ->          procedure SetMessages   (\serverModel -> (serverModel, Task.succeed serverModel.messages))
+  SendMessage message ->  procedure SetMessages   (\serverModel -> let newMessages = message :: serverModel.messages in
                                                                                      ({ serverModel | messages = newMessages }, Task.succeed newMessages))
-  CounterProc proc ->     Proc.map CounterMsg (\counter serverModel -> { serverModel | counter = counter}) (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
+  CounterProc proc ->     Procedure.map CounterMsg (\counter serverModel -> { serverModel | counter = counter}) (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
 
 type ServerMsg = ServerTick | CounterServerMsg Counter.ServerMsg | Nothing
 
@@ -62,7 +62,7 @@ type alias Model = { input: String
                    , error: String
                    , counter: Counter.Model }
 
-init : Input -> ( Model, MultitierCmd Procedure Msg)
+init : Input -> ( Model, MultitierCmd Proc Msg)
 init {messages} = let (counter, cmds) = Counter.init
        in (Model "" messages "" counter,  batch [ map CounterProc CounterMsg cmds ])
 
@@ -71,7 +71,7 @@ type Msg = OnInput String | Send |
            Handle (Result Error ()) |
            Tick | CounterMsg Counter.Msg | None
 
-update : Msg -> Model -> ( Model, MultitierCmd Procedure Msg )
+update : Msg -> Model -> ( Model, MultitierCmd Proc Msg )
 update msg model =
     case msg of
       OnInput text -> ({ model | input = text}, none)
