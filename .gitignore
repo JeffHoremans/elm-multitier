@@ -4,9 +4,10 @@ elm-stuff/
 repl-temp-*
 
 # generated files
-examples/client.js
-examples/server.js
-examples/index.html
+examples/*.js
+examples/*.html
+examples/demo/*.js
+examples/demo/*.html
 
 #Node
 # Logs

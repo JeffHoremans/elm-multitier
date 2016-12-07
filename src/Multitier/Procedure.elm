@@ -1,6 +1,6 @@
 module Multitier.Procedure exposing
   ( RemoteProcedure(..)
-  , Handlers
+  , Handler
   , remoteProcedure
   , map)
 
@@ -10,12 +10,12 @@ import Task exposing (Task)
 import Multitier.Error exposing (Error(..))
 import Multitier.LowLevel exposing (toJSON, fromJSON)
 
-type RemoteProcedure serverModel msg = RP (Handlers msg) (serverModel -> (serverModel, Task Error Value))
+type RemoteProcedure serverModel msg = RP (Handler msg) (serverModel -> (serverModel, Task Error Value))
 
-type alias Handlers msg = ((Error -> msg),(Value -> msg))
+type alias Handler msg = Result Error Value -> msg
 
-mapHandlers : (a -> msg) -> Handlers a -> Handlers msg
-mapHandlers f (onError, onSuccess) = ((onError >> f), (onSuccess >> f))
+mapHandlers : (a -> msg) -> Handler a -> Handler msg
+mapHandlers f handler = handler >> f
 
 mapToTask : (a -> serverModel -> serverModel) -> (serverModel -> a) -> (a -> (a, Task Error Value)) -> (serverModel -> (serverModel, Task Error Value))
 mapToTask updateModel toA toTask = \serverModel -> let a = (toA serverModel) in
@@ -24,9 +24,9 @@ mapToTask updateModel toA toTask = \serverModel -> let a = (toA serverModel) in
 map : (b -> msg) -> (a -> serverModel -> serverModel) -> (serverModel -> a) -> RemoteProcedure a b -> RemoteProcedure serverModel msg
 map toMsg fromA toA (RP handlers toTask) = RP (mapHandlers toMsg handlers) (mapToTask fromA toA toTask)
 
-remoteProcedure : (Error -> msg) -> (result -> msg) -> (serverModel -> (serverModel, Task Error result)) -> RemoteProcedure serverModel msg
-remoteProcedure onError onSuccess toTask =
-  let mappedOnSuccess = \value -> let res = fromJSON value in onSuccess res
+remoteProcedure : (Result Error result -> msg) -> (serverModel -> (serverModel, Task Error result)) -> RemoteProcedure serverModel msg
+remoteProcedure handler toTask =
+  let mappedHandler = \result -> handler (Result.map fromJSON result)
       mappedToTask = \serverModel -> let (newServerModel, task) = toTask serverModel
                                      in (newServerModel, Task.map toJSON task)
-  in RP (onError,mappedOnSuccess) mappedToTask
+  in RP mappedHandler mappedToTask

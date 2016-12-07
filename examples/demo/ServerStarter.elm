@@ -1,7 +1,7 @@
 module ServerStarter exposing (..)
 
 import Multitier exposing (ProgramType(..), MultitierMsg)
-import Main exposing (..)
+import Chat exposing (..)
 
 main : Program Never ServerModel (MultitierMsg ServerMsg)
 main =

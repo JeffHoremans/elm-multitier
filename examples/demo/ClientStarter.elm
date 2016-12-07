@@ -1,11 +1,11 @@
-module ServerStarter exposing (..)
+module ClientStarter exposing (..)
 
-import Multitier exposing (ProgramType(..), MultitierMsg)
-import Main exposing (..)
+import Multitier exposing (ProgramType(..))
+import Chat exposing (..)
 
-main : Program Never ServerModel (MultitierMsg ServerMsg)
+main : Program Never Model Msg
 main =
-    Multitier.serverProgram
+    Multitier.clientProgram
         { config = config
         , procedures = procedures
         , init = init
@@ -15,4 +15,5 @@ main =
         , initServer = initServer
         , serverState = serverState
         , updateServer = updateServer
-        , serverSubscriptions = serverSubscriptions }
+        , serverSubscriptions = serverSubscriptions
+        }

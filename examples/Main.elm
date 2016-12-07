@@ -1,7 +1,6 @@
 module Main exposing (..)
 
-import Html exposing (..)
-import Html.App as App
+import Html exposing (Html)
 import Html.Events as E
 import Html.Attributes
 import Task exposing (Task)
@@ -28,14 +27,13 @@ type alias ServerModel = { messages: List String
 initServer : ServerModel
 initServer = ServerModel [] Counter.initServer
 
-type Procedure = DupVal String | Log String | GetMessages | SendMessage String | CounterProc Counter.Procedure
+type Procedure = Log String | GetMessages | SendMessage String | CounterProc Counter.Procedure
 
 procedures : Procedure -> RemoteProcedure ServerModel Msg
 procedures proc = case proc of
-  DupVal val ->           remoteProcedure HandleError HandleSuccess (\serverModel -> (serverModel, Task.succeed (val ++ val)))
-  Log val ->              remoteProcedure HandleError (always None) (\serverModel -> (serverModel, Console.log val))
-  GetMessages ->          remoteProcedure HandleError SetMessages   (\serverModel -> (serverModel, Task.succeed serverModel.messages))
-  SendMessage message ->  remoteProcedure HandleError SetMessages   (\serverModel -> let newMessages = message :: serverModel.messages in
+  Log val ->              remoteProcedure Handle (\serverModel -> (serverModel, Console.log val))
+  GetMessages ->          remoteProcedure SetMessages   (\serverModel -> (serverModel, Task.succeed serverModel.messages))
+  SendMessage message ->  remoteProcedure SetMessages   (\serverModel -> let newMessages = message :: serverModel.messages in
                                                                                      ({ serverModel | messages = newMessages }, Task.succeed newMessages))
   CounterProc proc ->     Proc.map CounterMsg (\counter serverModel -> { serverModel | counter = counter}) (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
 
@@ -43,7 +41,7 @@ type ServerMsg = ServerTick | CounterServerMsg Counter.ServerMsg | Nothing
 
 updateServer : ServerMsg -> ServerModel -> (ServerModel, Cmd ServerMsg)
 updateServer msg serverModel = case msg of
-  ServerTick -> serverModel ! [Task.perform (always Nothing) (always Nothing) (Console.log (toString serverModel.messages))]
+  ServerTick -> serverModel ! [Task.attempt (always Nothing) (Console.log (toString serverModel.messages))]
   CounterServerMsg msg -> let (counter, cmds) = Counter.updateServer msg serverModel.counter in { serverModel | counter = counter} ! [Cmd.map CounterServerMsg cmds]
   Nothing -> serverModel ! []
 
@@ -69,8 +67,8 @@ init {messages} = let (counter, cmds) = Counter.init
        in (Model "" messages "" counter,  batch [ map CounterProc CounterMsg cmds ])
 
 type Msg = OnInput String | Send |
-           SetMessages (List String) |
-           HandleError Error | HandleSuccess String |
+           SetMessages (Result Error (List String)) |
+           Handle (Result Error ()) |
            Tick | CounterMsg Counter.Msg | None
 
 update : Msg -> Model -> ( Model, MultitierCmd Procedure Msg )
@@ -78,9 +76,12 @@ update msg model =
     case msg of
       OnInput text -> ({ model | input = text}, none)
       Send -> { model | input = "" } !! [performOnServer (SendMessage model.input)]
-      HandleError err -> ({ model | error = "error"}, none)
-      HandleSuccess val -> { model | messages = ("Logged succesfully: " ++ val) :: model.messages } !! []
-      SetMessages messages -> { model | messages = messages } !! []
+      Handle result -> case result of
+        Ok _ -> { model | messages = ("Logged succesfully") :: model.messages } !! []
+        _ -> { model | error = "error" } !! []
+      SetMessages result -> case result of
+        Ok messages -> { model | messages = messages } !! []
+        _ -> { model | error = "error" } !! []
       Tick -> model !! [performOnServer GetMessages]
 
       CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter
@@ -103,10 +104,10 @@ view model =
     Html.h1 [] [ Html.text "Multitier Elm - Client"],
     Html.div [] [
     Html.input [E.onInput OnInput, Html.Attributes.value model.input] [],
-    Html.button [E.onClick Send] [text "Send"]
+    Html.button [E.onClick Send] [Html.text "Send"]
     ],
     Html.div [] [
       Html.text (toString model.messages),
       Html.br [] [],
       Html.text model.error],
-    Html.div [] [App.map CounterMsg (Counter.view model.counter)]]]
+    Html.div [] [Html.map CounterMsg (Counter.view model.counter)]]]

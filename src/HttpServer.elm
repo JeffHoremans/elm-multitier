@@ -109,7 +109,7 @@ init =
 -- HANDLE APP MESSAGES
 
 (&>) : Task a b -> Task a c -> Task a c
-(&>) t1 t2 = Task.andThen t1 (\_ -> t2)
+(&>) t1 t2 = t1 |> Task.andThen (\_ -> t2)
 
 
 onEffects
@@ -130,12 +130,8 @@ onEffects router cmds subs state =
 
         leftStep portNumber _ getNewServers =
           getNewServers
-            `Task.andThen` \newServers ->
-
-          attemptOpen router portNumber
-            `Task.andThen` \pid ->
-
-          Task.succeed (Dict.insert portNumber (Opening pid) newServers)
+            |> Task.andThen (\newServers -> attemptOpen router portNumber
+            |> Task.andThen (\pid -> Task.succeed (Dict.insert portNumber (Opening pid) newServers)))
 
         bothStep portNumber _ server getNewServers =
           Task.map (Dict.insert portNumber server) getNewServers
@@ -144,12 +140,10 @@ onEffects router cmds subs state =
           close server &> getNewServers
       in
         Dict.merge leftStep bothStep rightStep newEntries state.servers (Task.succeed Dict.empty)
-          `Task.andThen` \newServers ->
-
-        Task.succeed (State newServers newSubs)
+          |> Task.andThen (\newServers -> Task.succeed (State newServers newSubs))
 
   in
-    sendReplies cmds `Task.andThen` cleanup
+    sendReplies cmds |> Task.andThen cleanup
 
 
 
@@ -217,9 +211,7 @@ onSelfMsg router selfMsg state =
 
         Just _ ->
           attemptOpen router portNumber
-            `Task.andThen` \pid ->
-
-          Task.succeed (updateServer portNumber (Opening pid) state)
+            |> Task.andThen (\pid -> Task.succeed (updateServer portNumber (Opening pid) state))
 
     Open portNumber server ->
       Task.succeed (updateServer portNumber (Listening server) state)
@@ -240,8 +232,7 @@ attemptOpen router portNumber =
   let
     actuallyAttemptOpen =
       open router portNumber
-        `Task.andThen` \server ->
-      Platform.sendToSelf router (Open portNumber server)
+        |> Task.andThen (\server -> Platform.sendToSelf router (Open portNumber server))
   in
     Process.spawn actuallyAttemptOpen
 

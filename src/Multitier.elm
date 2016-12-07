@@ -10,18 +10,18 @@ module Multitier
 
            , ProgramType(..)
            , Config
-           , program
+           , MultitierMsg
+           , clientProgram
+           , serverProgram
            )
 
-import Html.App as App
 import Html exposing (Html)
 import Task exposing (Task, andThen)
 import Http
-import Exts.Http
+-- import Exts.Http
 import Json.Encode as Encode exposing (Value)
-import Json.Decode as Decode exposing (Decoder, object2, (:=))
+import Json.Decode as Decode exposing (Decoder, map2, field)
 import String
-import Worker
 
 import HttpServer
 import HttpServer.Utils exposing (Method(..))
@@ -62,9 +62,9 @@ type alias Response = { --status: Status,
                       , message: String }
 
 decodeResponse : Decoder Response
-decodeResponse = object2 Response
-  ("data"     := Decode.oneOf [ Decode.null Nothing, Decode.map Just Decode.value ])
-  ("message"  := Decode.string)
+decodeResponse = map2 Response
+  (field "data" (Decode.oneOf [ Decode.null Nothing, Decode.map Just Decode.value ]))
+  (field "message" Decode.string)
 
 encodeResponse : Response -> Value
 encodeResponse response = Encode.object
@@ -82,17 +82,28 @@ unbatch : Config -> (procedure -> RemoteProcedure serverModel msg) -> MultitierC
 unbatch config proceduresMap mtcmd =
   case mtcmd of
     ServerCmd procedure ->
-      let (RP (onError,onSucceed) _) = proceduresMap procedure in
-        Task.perform onError onSucceed
-          (((Exts.Http.postJson decodeResponse
-              ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/procedure" )
-              (Http.string (Encode.encode 4 (toJSON procedure))))
-
-                |> Task.mapError (\err -> NetworkError err))
-
-                  `andThen` \response -> case response.data of
-                    Just data -> Task.succeed data
-                    _ -> Task.fail (ServerError response.message))
+      -- let (RP handler _) = proceduresMap procedure in
+      --   Http.send handler
+      --     ((
+      --       (Http.post ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/procedure" )
+      --                  (Http.jsonBody (toJSON procedure)) decodeResponse)
+      --
+      --       -- (Exts.Http.postJson decodeResponse
+      --       --   ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/procedure" )
+      --       --   (Http.string (Encode.encode 4 (toJSON procedure))))
+      --
+      --           |> Http..mapError (\err -> NetworkError err))
+      --
+      --             |> andThen (\response -> case response.data of
+      --               Just data -> Task.succeed data
+      --               _ -> Task.fail (ServerError response.message)))
+      let (RP handler _) = proceduresMap procedure in
+        Http.send (\result -> handler ((Result.mapError (\err -> NetworkError err) result)
+                                          |> Result.andThen (\response -> case response.data of
+                                              Just data -> Ok data
+                                              _ -> Err (ServerError response.message))))
+          (Http.post  ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/procedure" )
+                      (Http.jsonBody (toJSON procedure)) decodeResponse)
 
     ClientCmd cmd -> cmd
     Batch cmds    -> Cmd.batch (List.map (unbatch config proceduresMap) cmds)
@@ -100,6 +111,8 @@ unbatch config proceduresMap mtcmd =
 
 
 type MyMsg msg = UserMsg msg | Request HttpServer.Request | Reply HttpServer.Request String (Maybe Value) | ReplyFile HttpServer.Request String
+
+type alias MultitierMsg msg = MyMsg msg
 
 unwrapInit :
      Config
@@ -120,9 +133,8 @@ unwrapUpdate config proceduresMap update =
 
 type ProgramType = OnServer | OnClient
 
-program :
-       ProgramType
-    -> { config: Config
+clientProgram :
+       { config: Config
        , init : input -> ( model, MultitierCmd procedure msg )
        , update : msg -> model -> ( model, MultitierCmd procedure msg )
        , subscriptions : model -> Sub msg
@@ -133,15 +145,29 @@ program :
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
        }
-    -> Program Never
-program ptype stuff = case ptype of
-  OnClient -> App.program
-          { init = unwrapInit stuff.config stuff.procedures (stuff.init (stuff.serverState (LowLevel.bootstrapStub stuff.initServer)))
-          , update = unwrapUpdate stuff.config stuff.procedures stuff.update
-          , subscriptions = stuff.subscriptions
-          , view = stuff.view
-          }
-  OnServer ->
+    -> Program Never model msg
+clientProgram stuff =
+  Html.program
+    { init = unwrapInit stuff.config stuff.procedures (stuff.init (stuff.serverState (LowLevel.bootstrapStub stuff.initServer)))
+    , update = unwrapUpdate stuff.config stuff.procedures stuff.update
+    , subscriptions = stuff.subscriptions
+    , view = stuff.view
+    }
+
+serverProgram :
+       { config: Config
+       , init : input -> ( model, MultitierCmd procedure msg )
+       , update : msg -> model -> ( model, MultitierCmd procedure msg )
+       , subscriptions : model -> Sub msg
+       , view : model -> Html msg
+       , initServer: serverModel
+       , serverState : serverModel -> input
+       , procedures : procedure -> RemoteProcedure serverModel msg
+       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
+       , serverSubscriptions : serverModel -> Sub serverMsg
+       }
+    -> Program Never serverModel (MyMsg serverMsg)
+serverProgram stuff =
     let update = stuff.updateServer
             in let wrapInit =  (stuff.initServer, Cmd.none)
                    wrapUpdate msg model =
@@ -153,7 +179,7 @@ program ptype stuff = case ptype of
                    wrapSubscriptions model =
                      Sub.batch [ HttpServer.listen stuff.config.httpPort Request, Sub.map UserMsg (stuff.serverSubscriptions stuff.initServer)]
 
-    in Worker.program (\_ -> Cmd.none) -- TODO command line arguments??
+    in Platform.program
           { init = wrapInit
           , update = wrapUpdate
           , subscriptions = wrapSubscriptions
@@ -165,8 +191,9 @@ handle serverState procedures request model =
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
   in case request.method of
     GET -> case pathList of
-      [] -> (model, Task.perform (\_ -> Reply request "Invalid request" Nothing)
-                                 (\_ -> ReplyFile request "examples/index.html")
+      [] -> (model, Task.attempt (\result -> case result of
+                                    Err _ ->    Reply request "Invalid request" Nothing
+                                    _     ->    ReplyFile request "examples/index.html")
                                  (File.replace "examples/index.html"
                                                "_JeffHoremans\\$elm_multitier\\$Multitier_LowLevel\\$bootstrapStub\\s=.*"
                                                ("_JeffHoremans$elm_multitier$Multitier_LowLevel$" ++ "bootstrapStub =function(x){return "++ (Encode.encode 0 (toJSON model)) ++ "}") False) )
@@ -174,7 +201,9 @@ handle serverState procedures request model =
     POST -> case pathList of
       ["procedure"] -> let (RP _ toTask) = procedures (fromJSONString request.body) in
         let (newModel, task) = toTask model in
-          (newModel, Task.perform (\err -> Reply request "Procedure failed" Nothing) (\value -> Reply request "" (Just value)) task)
+          (newModel, Task.attempt (\result -> case result of
+                                    Err _ ->      Reply request "Procedure failed" Nothing
+                                    Ok value ->   Reply request "" (Just value)) task)
       _ -> invalidRequest "Invalid request"
     _ -> invalidRequest "Invalid request"
 

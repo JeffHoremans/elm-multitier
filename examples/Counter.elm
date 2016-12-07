@@ -22,7 +22,7 @@ type Procedure = Add Int Int
 
 proceduresMap : Procedure -> RemoteProcedure ServerModel Msg
 proceduresMap proc = case proc of
-  Add a b -> remoteProcedure HandleError HandleSuccess (\serverModel -> (serverModel, Task.succeed (a + b)))
+  Add a b -> remoteProcedure Handle (\serverModel -> (serverModel, Task.succeed (a + b)))
 
 type ServerMsg = Nothing
 
@@ -37,13 +37,14 @@ serverSubscriptions model = Sub.none
 init : ( Model, MultitierCmd Procedure Msg)
 init = Model 0 "" !! []
 
-type Msg = HandleError Error | HandleSuccess Int | Increment | None
+type Msg = Handle (Result Error Int) | Increment | None
 
 update : Msg -> Model -> ( Model, MultitierCmd Procedure Msg )
 update msg model =
     case msg of
-      HandleError err -> ({ model | error = "error"}, none)
-      HandleSuccess val -> { model | value = val } !! []
+      Handle result -> case result of
+        Ok val -> { model | value = val } !! []
+        _ -> { model | error = "error" } !! []
       Increment -> model !! [performOnServer (Add model.value 1)]
       None -> ( model, none )
 
