@@ -3,7 +3,7 @@ module ClientStarter exposing (..)
 import Multitier exposing (ProgramType(..))
 import Main exposing (..)
 
-main : Program Never Model Msg
+main : Program String Model Msg
 main =
     Multitier.clientProgram
         { config = config

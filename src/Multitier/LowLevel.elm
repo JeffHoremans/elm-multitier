@@ -11,6 +11,3 @@ fromJSON = Native.Multitier.LowLevel.fromJSON
 
 fromJSONString : String -> a
 fromJSONString = Native.Multitier.LowLevel.fromJSONString
-
-bootstrapStub : serverModel -> serverModel
-bootstrapStub = Native.Multitier.LowLevel.bootstrapStub

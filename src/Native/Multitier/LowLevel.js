@@ -26,15 +26,10 @@ var _JeffHoremans$elm_multitier$Native_Multitier_LowLevel = (function() {
       }
   }
 
-  var bootstrapStub = function(x) {
-    return x
-  }
-
   return {
     toJSON: toJSON,
     fromJSON: fromJSON,
-    fromJSONString: fromJSONString,
-    bootstrapStub: bootstrapStub
+    fromJSONString: fromJSONString
   };
 
 })();

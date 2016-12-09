@@ -23,11 +23,11 @@ import Json.Decode as Decode exposing (Decoder, map2, field)
 import String
 
 import HttpServer
+import Server.File as File
 import HttpServer.Utils exposing (Method(..))
 import Multitier.Error exposing (Error(..))
 import Multitier.Procedure exposing (..)
 import Multitier.LowLevel as LowLevel exposing (fromJSON, toJSON, fromJSONString)
-import Server.ReplaceInFile as File
 
 type MultitierCmd procedure msg = ServerCmd procedure | ClientCmd (Cmd msg) | Batch (List (MultitierCmd procedure msg))
 
@@ -105,6 +105,19 @@ unwrapInit :
   -> ( model, Cmd msg )
 unwrapInit config proceduresMap ( model, cmds) = (model, unbatch config proceduresMap cmds)
 
+unwrapInitWithFlags :
+     Config
+  -> (procedure -> Procedure serverModel msg)
+  -> (serverModel -> input)
+  -> (input -> ( model, MultitierCmd procedure msg))
+  -> (String -> ( model, Cmd msg ))
+unwrapInitWithFlags config proceduresMap serverState init =
+  \str ->
+    let serverModel = fromJSONString str in
+      let (model, cmds) = init (serverState serverModel) in
+        (model, unbatch config proceduresMap cmds)
+
+
 unwrapUpdate :
      Config
   -> (procedure -> Procedure serverModel msg)
@@ -129,10 +142,10 @@ clientProgram :
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
        }
-    -> Program Never model msg
+    -> Program String model msg
 clientProgram stuff =
-  Html.program
-    { init = unwrapInit stuff.config stuff.procedures (stuff.init (stuff.serverState (LowLevel.bootstrapStub stuff.initServer)))
+  Html.programWithFlags
+    { init = unwrapInitWithFlags stuff.config stuff.procedures stuff.serverState stuff.init
     , update = unwrapUpdate stuff.config stuff.procedures stuff.update
     , subscriptions = stuff.subscriptions
     , view = stuff.view
@@ -158,8 +171,8 @@ serverProgram stuff =
                     case msg of
                       UserMsg userMsg -> updateHelp UserMsg <| update userMsg model
                       Request request -> handle stuff.serverState stuff.procedures request model
-                      Reply request message data -> updateHelp UserMsg <| (model, HttpServer.reply request (encodeResponse (Response data message)))
-                      ReplyFile request file ->  updateHelp UserMsg <| (model, HttpServer.replyFile request file)
+                      Reply request message data -> (model, HttpServer.reply request (encodeResponse (Response data message)))
+                      ReplyFile request file ->  (model, HttpServer.replyFile request file)
                    wrapSubscriptions model =
                      Sub.batch [ HttpServer.listen stuff.config.httpPort Request, Sub.map UserMsg (stuff.serverSubscriptions stuff.initServer)]
 
@@ -178,9 +191,9 @@ handle serverState procedures request model =
       [] -> (model, Task.attempt (\result -> case result of
                                     Err _ ->    Reply request "Invalid request" Nothing
                                     _     ->    ReplyFile request "examples/index.html")
-                                 (File.replace "examples/index.html"
-                                               "_JeffHoremans\\$elm_multitier\\$Multitier_LowLevel\\$bootstrapStub\\s=.*"
-                                               ("_JeffHoremans$elm_multitier$Multitier_LowLevel$" ++ "bootstrapStub =function(x){return "++ (Encode.encode 0 (toJSON model)) ++ "}") False) )
+                                 (File.write "examples/state.js" ("let state="++ (toString (Encode.encode 0 (toJSON model))))))
+      ["client.js"] -> (model, HttpServer.replyFile request "examples/client.js")
+      ["state.js"] -> (model, HttpServer.replyFile request "examples/state.js")
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
       ["procedure"] -> let (Proc _ toTask) = procedures (fromJSONString request.body) in
