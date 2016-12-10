@@ -1,3 +1,16 @@
+Version 5
+---------
+- Updated to version 0.18 which changed some minor things that made multitier-elm life a bit easier. In Elm 0.17, to perform a task one
+  always needed to provide to-Msg functions for both the success and fail scenarios, even if the task could never fail. In 0.18 one has two options
+  perform a task that can never fail (fail type Never) with only 1 to-Msg function required for the success scenario, or attempting to perform a task
+  which can both succeed or fail, but instead of needing two to-Msg functions it now also requires one, that creates a Msg from a result.
+  This means that the creation of remote procedures for the multitier-elm programmer now requires one less argument and fits better.
+- Added automatic initialization of the client with the current server state (so called bootstrapping). The init method of the client now takes a user-defined
+  input datatype. The user also provides a method that creates that input based on the serverModel to enable him to protect data that should not be
+  exposed outside of the server to be leaked. When a client request is made, the server will write the current state of the server model to a file by encoding it
+  to JSON and then to a string which will be converted to the right input data to initialize the client, preventing the need for requesting that very state at
+  the server initially. 
+
 Version 4
 ----------
 - Removed redundant encoding and decoding of the return type of remote procedures. This is now automatically done by also
