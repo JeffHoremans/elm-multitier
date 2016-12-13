@@ -1,3 +1,10 @@
+Version 6
+---------
+- Added automatic push of the server state to clients. Before, if clients wanted the current server, they needed to define a procedure which extracted
+  (part of) that state, potentially on a regular basis, thereby mimicking polling behaviour. Now, the multi-tier framework automatically keeps websocket connections
+  between clients and whenever the state of the server changes, it will notify all clients of this change, by sending the new state to the client.
+  Similarly to the bootstrapping solution, not the entire server model is sent, but a subset, created by using the serverState method provided by the user as mentioned before.
+
 Version 5
 ---------
 - Updated to version 0.18 which changed some minor things that made multitier-elm life a bit easier. In Elm 0.17, to perform a task one
@@ -6,10 +13,10 @@ Version 5
   which can both succeed or fail, but instead of needing two to-Msg functions it now also requires one, that creates a Msg from a result.
   This means that the creation of remote procedures for the multitier-elm programmer now requires one less argument and fits better.
 - Added automatic initialization of the client with the current server state (so called bootstrapping). The init method of the client now takes a user-defined
-  input datatype. The user also provides a method that creates that input based on the serverModel to enable him to protect data that should not be
+  input datatype. The user also provides a method that creates the serverState based on the serverModel to enable him to protect data that should not be
   exposed outside of the server to be leaked. When a client request is made, the server will write the current state of the server model to a file by encoding it
   to JSON and then to a string which will be converted to the right input data to initialize the client, preventing the need for requesting that very state at
-  the server initially. 
+  the server initially.
 
 Version 4
 ----------
