@@ -2,6 +2,7 @@ effect module HttpServer where { command = MyCmd, subscription = MySub } exposin
   ( reply
   , replyFile
   , listen
+  , broadcast
   , Request
   )
 
@@ -35,7 +36,7 @@ type alias Request = Http.Request
 -- COMMANDS
 
 
-type MyCmd msg = Reply Request Value | ReplyFile Request String
+type MyCmd msg = Reply Request Value | ReplyFile Request String | Broadcast String
 
 
 {-| Reply to a particular request. You might say something like this:
@@ -49,10 +50,15 @@ replyFile : Request -> String -> Cmd msg
 replyFile request filename =
   command (ReplyFile request filename)
 
+broadcast : String -> Cmd msg
+broadcast message =
+  command (Broadcast message)
+
 cmdMap : (a -> b) -> MyCmd a -> MyCmd b
 cmdMap _ cmd = case cmd of
   Reply request msg -> Reply request msg
   ReplyFile request filename -> ReplyFile request filename
+  Broadcast message -> Broadcast message
 
 
 
@@ -160,6 +166,10 @@ sendReplies cmds =
 
     ReplyFile request filename :: rest ->
       Http.replyFile request filename
+        &> sendReplies rest
+
+    Broadcast message :: rest ->
+      Http.broadcast message
         &> sendReplies rest
 
 

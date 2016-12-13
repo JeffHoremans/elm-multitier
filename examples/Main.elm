@@ -27,14 +27,13 @@ type alias ServerModel = { messages: List String
 initServer : ServerModel
 initServer = ServerModel [] Counter.initServer
 
-type Proc = Log String | GetMessages | SendMessage String | CounterProc Counter.Proc
+type Proc = Log String | SendMessage String | CounterProc Counter.Proc
 
 procedures : Proc -> Procedure ServerModel Msg
 procedures proc = case proc of
   Log val ->              procedure Handle        (\serverModel -> (serverModel, Console.log val))
-  GetMessages ->          procedure SetMessages   (\serverModel -> (serverModel, Task.succeed serverModel.messages))
-  SendMessage message ->  procedure SetMessages   (\serverModel -> let newMessages = message :: serverModel.messages in
-                                                                                     ({ serverModel | messages = newMessages }, Task.succeed newMessages))
+  SendMessage message ->  procedure Handle   (\serverModel -> let newMessages = message :: serverModel.messages in
+                                                                                     ({ serverModel | messages = newMessages }, Task.succeed ()))
   CounterProc proc ->     Procedure.map CounterMsg (\counter serverModel -> { serverModel | counter = counter}) (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
 
 type ServerMsg = ServerTick | CounterServerMsg Counter.ServerMsg | Nothing
@@ -67,9 +66,11 @@ init {messages} = let (counter, cmds) = Counter.init
        in (Model "" messages "" counter,  batch [ map CounterProc CounterMsg cmds ])
 
 type Msg = OnInput String | Send |
-           SetMessages (Result Error (List String)) |
            Handle (Result Error ()) |
-           Tick | CounterMsg Counter.Msg | None
+           CounterMsg Counter.Msg | None
+
+stateUpdate : Input -> Model -> ( Model, MultitierCmd Proc Msg)
+stateUpdate {messages} model = ({ model | messages = messages}, none)
 
 update : Msg -> Model -> ( Model, MultitierCmd Proc Msg )
 update msg model =
@@ -77,12 +78,8 @@ update msg model =
       OnInput text -> ({ model | input = text}, none)
       Send -> { model | input = "" } !! [performOnServer (SendMessage model.input)]
       Handle result -> case result of
-        Ok _ -> { model | messages = ("Logged succesfully") :: model.messages } !! []
+        Ok _ -> model !! []
         _ -> { model | error = "error" } !! []
-      SetMessages result -> case result of
-        Ok messages -> { model | messages = messages } !! []
-        _ -> { model | error = "error" } !! []
-      Tick -> model !! [performOnServer GetMessages]
 
       CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter
                            in { model | counter = counter } !! [ map CounterProc CounterMsg cmds ]
@@ -92,7 +89,7 @@ update msg model =
 -- SUBSCRIPTIONS
 
 subscriptions : Model -> Sub Msg
-subscriptions model = Sub.batch [Sub.map CounterMsg (Counter.subscriptions model.counter), Time.every second (always Tick)]
+subscriptions model = Sub.batch [Sub.map CounterMsg (Counter.subscriptions model.counter)]
 
 -- VIEW
 

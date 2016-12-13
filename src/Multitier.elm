@@ -8,9 +8,8 @@ module Multitier
            , performOnClient
            , performOnServer
 
-           , ProgramType(..)
            , Config
-           , MultitierMsg
+           , ServerMsg, ClientMsg
            , clientProgram
            , serverProgram
            )
@@ -21,6 +20,7 @@ import Http
 import Json.Encode as Encode exposing (Value)
 import Json.Decode as Decode exposing (Decoder, map2, field)
 import String
+import WebSocket
 
 import HttpServer
 import Server.File as File
@@ -94,9 +94,8 @@ unbatch config proceduresMap mtcmd =
 
 
 
-type MyMsg msg = UserMsg msg | Request HttpServer.Request | Reply HttpServer.Request String (Maybe Value) | ReplyFile HttpServer.Request String
-
-type alias MultitierMsg msg = MyMsg msg
+type ServerMsg msg = ServerUserMsg msg | Request HttpServer.Request | Reply HttpServer.Request String (Maybe Value) | ReplyFile HttpServer.Request String
+type ClientMsg msg = ClientUserMsg msg | Update String
 
 unwrapInit :
      Config
@@ -108,15 +107,13 @@ unwrapInit config proceduresMap ( model, cmds) = (model, unbatch config procedur
 unwrapInitWithFlags :
      Config
   -> (procedure -> Procedure serverModel msg)
-  -> (serverModel -> input)
   -> (input -> ( model, MultitierCmd procedure msg))
   -> (String -> ( model, Cmd msg ))
-unwrapInitWithFlags config proceduresMap serverState init =
+unwrapInitWithFlags config proceduresMap init =
   \str ->
-    let serverModel = fromJSONString str in
-      let (model, cmds) = init (serverState serverModel) in
+    let serverState = fromJSONString str in
+      let (model, cmds) = init serverState in
         (model, unbatch config proceduresMap cmds)
-
 
 unwrapUpdate :
      Config
@@ -128,27 +125,49 @@ unwrapUpdate config proceduresMap update =
     let (newModel, cmds) = update msg model
     in  (newModel, unbatch config proceduresMap cmds)
 
-type ProgramType = OnServer | OnClient
+unwrapStateUpdate :
+     Config
+  -> (procedure -> Procedure serverModel msg)
+  -> (serverState -> model -> ( model, MultitierCmd procedure msg ))
+  -> (serverState -> model -> ( model, Cmd msg ))
+unwrapStateUpdate config proceduresMap update =
+  \msg model ->
+    let (newModel, cmds) = update msg model
+    in  (newModel, unbatch config proceduresMap cmds)
 
 clientProgram :
        { config: Config
-       , init : input -> ( model, MultitierCmd proc msg )
+       , init : serverState -> ( model, MultitierCmd proc msg )
        , update : msg -> model -> ( model, MultitierCmd proc msg )
+       , stateUpdate: serverState -> model -> ( model, MultitierCmd proc msg)
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        , initServer: serverModel
-       , serverState : serverModel -> input
+       , serverState : serverModel -> serverState
        , procedures : proc -> Procedure serverModel msg
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
        }
-    -> Program String model msg
+    -> Program String model (ClientMsg msg)
 clientProgram stuff =
-  Html.programWithFlags
-    { init = unwrapInitWithFlags stuff.config stuff.procedures stuff.serverState stuff.init
-    , update = unwrapUpdate stuff.config stuff.procedures stuff.update
-    , subscriptions = stuff.subscriptions
-    , view = stuff.view
+  let init = unwrapInitWithFlags stuff.config stuff.procedures stuff.init
+      update = unwrapUpdate stuff.config stuff.procedures stuff.update
+      stateUpdate = unwrapStateUpdate stuff.config stuff.procedures stuff.stateUpdate
+  in let wrapUpdate msg model =
+          case msg of
+            ClientUserMsg userMsg -> updateHelp ClientUserMsg <| update userMsg model
+            Update message -> updateHelp ClientUserMsg <| stateUpdate (fromJSONString message) model
+         wrapSubscriptions model =
+           Sub.batch [ Sub.map ClientUserMsg (stuff.subscriptions model), WebSocket.listen ("ws://" ++ stuff.config.hostname ++ ":" ++ (toString stuff.config.httpPort)) Update]
+         wrapInit input =
+           let (model, cmds) = init input
+           in (model, Cmd.map ClientUserMsg cmds)
+         wrapView model = Html.map ClientUserMsg (stuff.view model)
+  in Html.programWithFlags
+    { init = wrapInit
+    , update = wrapUpdate
+    , subscriptions = wrapSubscriptions
+    , view = wrapView
     }
 
 serverProgram :
@@ -163,18 +182,21 @@ serverProgram :
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
        }
-    -> Program Never serverModel (MyMsg serverMsg)
+    -> Program Never serverModel (ServerMsg serverMsg)
 serverProgram stuff =
     let update = stuff.updateServer
             in let wrapInit =  (stuff.initServer, Cmd.none)
-                   wrapUpdate msg model =
+                   wrapUpdate msg model = let (newModel, cmds) =
                     case msg of
-                      UserMsg userMsg -> updateHelp UserMsg <| update userMsg model
+                      ServerUserMsg userMsg -> updateHelp ServerUserMsg <| update userMsg model
                       Request request -> handle stuff.serverState stuff.procedures request model
                       Reply request message data -> (model, HttpServer.reply request (encodeResponse (Response data message)))
                       ReplyFile request file ->  (model, HttpServer.replyFile request file)
+                    in case model == newModel of
+                      True -> (newModel, cmds)
+                      False -> (newModel, Cmd.batch [cmds, HttpServer.broadcast (Encode.encode 0 (toJSON (stuff.serverState newModel))) ])
                    wrapSubscriptions model =
-                     Sub.batch [ HttpServer.listen stuff.config.httpPort Request, Sub.map UserMsg (stuff.serverSubscriptions stuff.initServer)]
+                     Sub.batch [ HttpServer.listen stuff.config.httpPort Request, Sub.map ServerUserMsg (stuff.serverSubscriptions model)]
 
     in Platform.program
           { init = wrapInit
@@ -182,7 +204,7 @@ serverProgram stuff =
           , subscriptions = wrapSubscriptions
           }
 
-handle : (serverModel -> input) -> (procedure -> Procedure serverModel msg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (MyMsg serverMsg))
+handle : (serverModel -> input) -> (procedure -> Procedure serverModel msg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
 handle serverState procedures request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
@@ -191,7 +213,7 @@ handle serverState procedures request model =
       [] -> (model, Task.attempt (\result -> case result of
                                     Err _ ->    Reply request "Invalid request" Nothing
                                     _     ->    ReplyFile request "examples/index.html")
-                                 (File.write "examples/state.js" ("let state="++ (toString (Encode.encode 0 (toJSON model))))))
+                                 (File.write "examples/state.js" ("let state="++ (toString (Encode.encode 0 (toJSON (serverState model)))))))
       ["client.js"] -> (model, HttpServer.replyFile request "examples/client.js")
       ["state.js"] -> (model, HttpServer.replyFile request "examples/state.js")
       _ -> invalidRequest "Invalid request"

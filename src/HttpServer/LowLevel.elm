@@ -3,6 +3,7 @@ module HttpServer.LowLevel exposing
   , Settings
   , reply
   , replyFile
+  , broadcast
   , close
   , Server
   , Request
@@ -43,6 +44,10 @@ reply request value =
 replyFile : Request -> String -> Task x ()
 replyFile request filename =
   Native.HttpServer.LowLevel.replyFile request filename
+
+broadcast : String -> Task x ()
+broadcast value =
+  Native.HttpServer.LowLevel.broadcast value
 
 close : Server -> Task x ()
 close = Native.HttpServer.LowLevel.close

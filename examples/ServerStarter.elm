@@ -1,9 +1,9 @@
 module ServerStarter exposing (..)
 
-import Multitier exposing (ProgramType(..), MultitierMsg)
+import Multitier
 import Main exposing (..)
 
-main : Program Never ServerModel (MultitierMsg ServerMsg)
+main : Program Never ServerModel (Multitier.ServerMsg ServerMsg)
 main =
     Multitier.serverProgram
         { config = config
