@@ -158,7 +158,8 @@ clientProgram stuff =
             ClientUserMsg userMsg -> updateHelp ClientUserMsg <| update userMsg model
             Update message -> updateHelp ClientUserMsg <| stateUpdate (fromJSONString message) model
          wrapSubscriptions model =
-           Sub.batch [ Sub.map ClientUserMsg (stuff.subscriptions model), WebSocket.listen ("ws://" ++ stuff.config.hostname ++ ":" ++ (toString stuff.config.httpPort)) Update]
+           Sub.batch [ Sub.map ClientUserMsg (stuff.subscriptions model),
+                       WebSocket.listen ("ws://" ++ stuff.config.hostname ++ ":" ++ (toString stuff.config.httpPort)) Update ]
          wrapInit input =
            let (model, cmds) = init input
            in (model, Cmd.map ClientUserMsg cmds)

@@ -31,10 +31,11 @@ type Proc = Log String | SendMessage String | CounterProc Counter.Proc
 
 procedures : Proc -> Procedure ServerModel Msg
 procedures proc = case proc of
-  Log val ->              procedure Handle        (\serverModel -> (serverModel, Console.log val))
-  SendMessage message ->  procedure Handle   (\serverModel -> let newMessages = message :: serverModel.messages in
-                                                                                     ({ serverModel | messages = newMessages }, Task.succeed ()))
-  CounterProc proc ->     Procedure.map CounterMsg (\counter serverModel -> { serverModel | counter = counter}) (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
+  Log val ->              procedure Handle (\serverModel -> (serverModel, Console.log val))
+  SendMessage message ->  procedure Handle (\serverModel -> let newMessages = message :: serverModel.messages in
+                                           ({ serverModel | messages = newMessages }, Task.succeed ()))
+  CounterProc proc ->     Procedure.map CounterMsg (\counter serverModel -> { serverModel | counter = counter})
+                                                   (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
 
 type ServerMsg = ServerTick | CounterServerMsg Counter.ServerMsg | Nothing
 
@@ -80,10 +81,7 @@ update msg model =
       Handle result -> case result of
         Ok _ -> model !! []
         _ -> { model | error = "error" } !! []
-
-      CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter
-                           in { model | counter = counter } !! [ map CounterProc CounterMsg cmds ]
-
+      CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter in { model | counter = counter } !! [ map CounterProc CounterMsg cmds ]
       None -> ( model, none )
 
 -- SUBSCRIPTIONS
