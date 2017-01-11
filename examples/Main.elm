@@ -10,6 +10,7 @@ import Multitier exposing (MultitierCmd(..), Config, none, batch, performOnServe
 import Multitier.Procedure as Procedure exposing (procedure, Procedure)
 import Multitier.Error exposing (Error(..))
 import Multitier.Server.Console as Console
+import Multitier.Server.WebSocket as ServerWebSocket exposing (SocketServer)
 
 import Counter
 
@@ -36,16 +37,20 @@ procedures proc = case proc of
   CounterProc proc ->     Procedure.map CounterMsg (\counter serverModel -> { serverModel | counter = counter})
                                                    (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
 
-type ServerMsg = ServerTick | CounterServerMsg Counter.ServerMsg | Nothing
+type ServerMsg = ServerTick | OnMessage (SocketServer,Int,String) | CounterServerMsg Counter.ServerMsg | Nothing
 
 updateServer : ServerMsg -> ServerModel -> (ServerModel, Cmd ServerMsg)
 updateServer msg serverModel = case msg of
-  ServerTick -> serverModel ! [Task.attempt (always Nothing) (Console.log (toString serverModel.messages))]
+  ServerTick -> serverModel ! [Task.perform (always Nothing) (Console.log (toString serverModel.messages))]
   CounterServerMsg msg -> let (counter, cmds) = Counter.updateServer msg serverModel.counter in { serverModel | counter = counter} ! [Cmd.map CounterServerMsg cmds]
+  OnMessage (server,cid,message) -> serverModel ! [Task.attempt (always Nothing) (Console.log message), ServerWebSocket.multicast server [0,1] message]
   Nothing -> serverModel ! []
 
 serverSubscriptions : ServerModel -> Sub ServerMsg
-serverSubscriptions serverModel = Sub.batch [Time.every 10000 (always ServerTick), Sub.map CounterServerMsg (Counter.serverSubscriptions serverModel.counter)]
+serverSubscriptions serverModel =
+  Sub.batch [ Time.every 10000 (always ServerTick)
+            , ServerWebSocket.listen OnMessage
+            , Sub.map CounterServerMsg (Counter.serverSubscriptions serverModel.counter)]
 
 -- INPUT
 

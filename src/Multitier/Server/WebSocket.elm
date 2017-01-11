@@ -1,7 +1,26 @@
 module Multitier.Server.WebSocket
     exposing
-        ( listen
+        ( SocketServer
+        , ClientId
+        , listen
+        , broadcast
+        , multicast
+        , send
         )
 
-listen : String
-listen = ""
+import Multitier.Server.HttpServer as HttpServer
+
+type alias SocketServer = HttpServer.SocketServer
+type alias ClientId = HttpServer.ClientId
+
+listen : ((SocketServer, Int, String) -> msg) -> Sub msg
+listen tagger = HttpServer.listenToSocket tagger
+
+broadcast : SocketServer -> String -> Cmd msg
+broadcast server message = HttpServer.broadcast server message
+
+multicast : SocketServer -> List ClientId -> String -> Cmd msg
+multicast server ids message = Cmd.batch (List.map (\cid -> send server cid message) ids)
+
+send : SocketServer -> ClientId -> String -> Cmd msg
+send server uid message = HttpServer.send server uid message

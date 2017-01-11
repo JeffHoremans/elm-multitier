@@ -13,7 +13,7 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
       var connection_id = 0
       var active_connections = {}
 
-      var listen = function (port, settings) {
+      var listen = function (port, handlers) {
         return Scheduler.nativeBinding(function (callback) {
 
           var server = http.createServer();
@@ -40,13 +40,13 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
                             , path: url.parse(req.url).path
                             , body: fullBody
                             , rawRequest: rawRequest }
-              Scheduler.rawSpawn(settings.onRequest(request));
+              Scheduler.rawSpawn(handlers.onRequest(request));
             });
           });
 
           server.on('close', function () {
             console.log('server closed');
-            Scheduler.rawSpawn(settings.onClose());
+            Scheduler.rawSpawn(handlers.onClose());
           });
 
           server.listen(port);
@@ -57,51 +57,77 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
         });
       }
 
-      // var listen_websocket = function(){
-      //   return Scheduler.nativeBinding(function(callback) {
-      //     var wsServer = new WebSocketServer({
-      //         httpServer: server,
-      //         // You should not use autoAcceptConnections for production
-      //         // applications, as it defeats all standard cross-origin protection
-      //         // facilities built into the protocol and the browser.  You should
-      //         // *always* verify the connection's origin and decide whether or not
-      //         // to accept it.
-      //         autoAcceptConnections: false
-      //     });
-      //
-      //     var originIsAllowed = function(origin) {
-      //       // put logic here to detect whether the specified origin is allowed.
-      //       return true;
-      //     }
-      //
-      //
-      //     wsServer.on('request', function(request) {
-      //         if (!originIsAllowed(request.origin)) {
-      //           // Make sure we only accept requests from an allowed origin
-      //           request.reject();
-      //           console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
-      //           return;
-      //         }
-      //
-      //         var connection = request.accept(null, request.origin);
-      //         var id = connection_id++;
-      //         active_connections[id] = connection;
-      //         connection.id = id
-      //
-      //         connection.on('close', function(reasonCode, description) {
-      //             console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
-      //             delete active_connections[connection.id]
-      //         });
-      //     });
-      //   })
-      // }
+      var openSocket = function(server, handlers){
+        return Scheduler.nativeBinding(function(callback) {
+          console.log("WebSocket Server started...")
+          var wsServer = new WebSocketServer({
+              httpServer: server,
+              // You should not use autoAcceptConnections for production
+              // applications, as it defeats all standard cross-origin protection
+              // facilities built into the protocol and the browser.  You should
+              // *always* verify the connection's origin and decide whether or not
+              // to accept it.
+              autoAcceptConnections: false
+          });
 
-      var broadcast = function(message) {
+          var originIsAllowed = function(origin) {
+            // put logic here to detect whether the specified origin is allowed.
+            return true;
+          }
+
+          wsServer.on('request', function(request) {
+              if (!originIsAllowed(request.origin)) {
+                // Make sure we only accept requests from an allowed origin
+                request.reject();
+                console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
+                return;
+              }
+
+              var connection = request.accept(null, request.origin);
+              var id = connection_id++;
+              active_connections[id] = connection;
+              connection.id = id
+
+              connection.on('message', function(message){
+                if(message.type === 'utf8'){
+                  Scheduler.rawSpawn(handlers.onMessage({clientId: id, data: message.utf8Data}));
+                }
+                else if(message.type === 'binary'){
+                  request.reject()
+                }
+
+              })
+
+              connection.on('close', function(reasonCode, description) {
+                  console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
+                  delete active_connections[connection.id]
+              });
+          });
+
+          callback(_elm_lang$core$Native_Scheduler.succeed({ ctor:"SocketServer" }))
+
+        })
+      }
+
+      var broadcast = function(server, message) {
         return Scheduler.nativeBinding(function(callback) {
           for (var id in active_connections){
             active_connections[id].sendUTF(message)
           }
           callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+        })
+      }
+
+      var send = function(server, cid, message) {
+        return Scheduler.nativeBinding(function(callback) {
+          console.log("REPLYING!!!!!!!!")
+          console.log(cid)
+          if(active_connections[cid]){
+            active_connections[cid].sendUTF(message)
+            callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+          } else {
+            callback(_elm_lang$core$Native_Scheduler.fail("Client with the given id is not connected (anymore)..."));
+          }
         })
       }
 
@@ -139,12 +165,14 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
         listen: F2(listen),
         reply: F2(reply),
         replyFile: F2(replyFile),
-        broadcast: broadcast,
+        openSocket: F2(openSocket),
+        broadcast: F2(broadcast),
+        send: F3(send),
         close: close
       };
   } else {
 
-      var listen = function(port, settings) {
+      var listen = function(port, handlers) {
         return Scheduler.nativeBinding(function(callback) {
           return callback(Scheduler.fail(Utils.Tuple0));
         });
@@ -162,7 +190,19 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
         });
       }
 
-      var broadcast = function(message) {
+      var openSocket = function(server, handlers) {
+        return Scheduler.nativeBinding(function(callback) {
+          return callback(Scheduler.fail(Utils.Tuple0));
+        });
+      }
+
+      var broadcast = function(server, message) {
+        return Scheduler.nativeBinding(function(callback) {
+          return callback(Scheduler.fail(Utils.Tuple0));
+        });
+      }
+
+      var send = function(server, cid, message) {
         return Scheduler.nativeBinding(function(callback) {
           return callback(Scheduler.fail(Utils.Tuple0));
         });
@@ -178,7 +218,9 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
         listen: F2(listen),
         reply: F2(reply),
         replyFile: F2(replyFile),
-        broadcast: broadcast,
+        openSocket: F2(openSocket),
+        broadcast: F2(broadcast),
+        send: F3(send),
         close: close
       };
 

@@ -1,12 +1,16 @@
 module Multitier.Server.HttpServer.LowLevel exposing
   ( listen
-  , Settings
+  , openSocket
+  , EventHandlers
   , reply
   , replyFile
   , broadcast
+  , send
   , close
   , Server
+  , SocketServer
   , Request
+  , ClientId
   )
 
 
@@ -18,36 +22,43 @@ import Multitier.Server.HttpServer.Utils exposing (Method)
 
 
 type Server = Server
+type SocketServer = SocketServer
 
 type alias Request = { method: Method
                      , path: String
                      , body: String
                      , rawRequest: RawRequest }
-
-
 type RawRequest = RawRequest
 
-listen : Int -> Settings -> Task x Server
-listen portNumber settings =
-  Native.Multitier.Server.HttpServer.LowLevel.listen portNumber settings
+type alias ClientId = Int
+type alias Message = { clientId: ClientId
+                     , data: String}
 
+type alias WebSocketEventHandlers =
+  { onMessage : Message -> Task Never () }
 
-type alias Settings =
+type alias EventHandlers =
   { onRequest : Request -> Task Never ()
   , onClose : () -> Task Never ()
   }
 
+listen : Int -> EventHandlers -> Task x Server
+listen portNumber handlers = Native.Multitier.Server.HttpServer.LowLevel.listen portNumber handlers
+
+openSocket : Server -> WebSocketEventHandlers -> Task x SocketServer
+openSocket handlers = Native.Multitier.Server.HttpServer.LowLevel.openSocket handlers
+
 reply : Request -> Value -> Task x ()
-reply request value =
-  Native.Multitier.Server.HttpServer.LowLevel.reply request (Encode.encode 4 value)
+reply request value = Native.Multitier.Server.HttpServer.LowLevel.reply request (Encode.encode 4 value)
 
 replyFile : Request -> String -> Task x ()
-replyFile request filename =
-  Native.Multitier.Server.HttpServer.LowLevel.replyFile request filename
+replyFile request filename = Native.Multitier.Server.HttpServer.LowLevel.replyFile request filename
 
-broadcast : String -> Task x ()
-broadcast value =
-  Native.Multitier.Server.HttpServer.LowLevel.broadcast value
+broadcast : SocketServer -> String -> Task x ()
+broadcast server message = Native.Multitier.Server.HttpServer.LowLevel.broadcast server message
+
+send : SocketServer -> ClientId -> String -> Task x ()
+send server cid message = Native.Multitier.Server.HttpServer.LowLevel.send server cid message
 
 close : Server -> Task x ()
 close = Native.Multitier.Server.HttpServer.LowLevel.close

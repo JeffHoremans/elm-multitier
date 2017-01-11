@@ -2,267 +2,166 @@ effect module Multitier.Server.HttpServer where { command = MyCmd, subscription 
   ( reply
   , replyFile
   , listen
+  , listenToSocket
   , broadcast
+  , send
   , Request
+  , SocketServer
+  , ClientId
   )
 
-{-|
--}
-
-import Dict
-import Process
-import Task exposing (Task)
+import Task exposing (Task, andThen)
 import Json.Encode as Encode exposing (Value)
-import Multitier.Server.HttpServer.LowLevel as Http
+import Process
 
--- type alias Server = Http.Server
+import Multitier.Server.HttpServer.LowLevel as Http
 
 type alias Request = Http.Request
 
+type alias SocketServer = Http.SocketServer
+type alias ClientId = Http.ClientId
 
--- type alias Request =
---   { process : Process.Id
---   , headers : List (String, String)
---   , body : Body
---   }
-
--- type alias Response =
---   { status : Int
---   , statusText : String
---   , headers : Dict String String
---   , value : Value
---   }
 
 -- COMMANDS
 
+type MyCmd msg = Reply Request Value | ReplyFile Request String |
+                 Broadcast SocketServer String | Send SocketServer Int String
 
-type MyCmd msg = Reply Request Value | ReplyFile Request String | Broadcast String
-
-
-{-| Reply to a particular request. You might say something like this:
-    reply request "Hello!"
--}
 reply : Request -> Value -> Cmd msg
 reply request message =
   command (Reply request message)
 
 replyFile : Request -> String -> Cmd msg
-replyFile request filename =
-  command (ReplyFile request filename)
+replyFile request filename = command (ReplyFile request filename)
 
-broadcast : String -> Cmd msg
-broadcast message =
-  command (Broadcast message)
+broadcast : SocketServer -> String -> Cmd msg
+broadcast server message = command (Broadcast server message)
+
+send : SocketServer -> Int -> String -> Cmd msg
+send server cid message = command (Send server cid message)
 
 cmdMap : (a -> b) -> MyCmd a -> MyCmd b
 cmdMap _ cmd = case cmd of
   Reply request msg -> Reply request msg
   ReplyFile request filename -> ReplyFile request filename
-  Broadcast message -> Broadcast message
+  Broadcast server message -> Broadcast server message
+  Send server cid message -> Send server cid message
 
 
 
 -- SUBSCRIPTIONS
 
 
-type MySub msg
-  = Listen Int (Request -> msg)
+type MySub msg = Listen Int (Request -> msg) | ListenSocket ((SocketServer, Int, String) -> msg)
 
-
-{-| Subscribe to any incoming request to the server.
--}
 listen : Int -> (Request -> msg) -> Sub msg
 listen portNumber tagger =
   subscription (Listen portNumber tagger)
 
+listenToSocket : ((SocketServer,Int,String) -> msg) -> Sub msg
+listenToSocket tagger =
+  subscription (ListenSocket tagger)
 
 subMap : (a -> b) -> MySub a -> MySub b
-subMap func sub =
-  case sub of
-    Listen portNumber tagger ->
-      Listen portNumber (tagger >> func)
-
+subMap func sub = case sub of
+  Listen portNumber tagger -> Listen portNumber (tagger >> func)
+  ListenSocket tagger  -> ListenSocket (tagger >> func)
 
 
 -- MANAGER
 
-
 type alias State msg =
-  { servers : ServersDict
-  , subs : SubsDict msg
+  { server: Maybe Http.Server
+  , socketServer: Maybe SocketServer
+  , httpSub : Maybe (Int, (Request -> msg))
+  , socketSubs : List ((SocketServer,Int,String) -> msg)
   }
 
-
-type alias ServersDict =
-  Dict.Dict Int Server
-
-
-type alias SubsDict msg =
-  Dict.Dict Int (List (Request -> msg))
-
-
-type Server
-  = Opening Process.Id
-  | Listening Http.Server
-
-
 init : Task Never (State msg)
-init =
-  Task.succeed (State Dict.empty Dict.empty)
+init = Task.succeed (State Nothing Nothing Nothing [])
 
 
 
 -- HANDLE APP MESSAGES
 
-(&>) : Task a b -> Task a c -> Task a c
-(&>) t1 t2 = t1 |> Task.andThen (\_ -> t2)
 
+onEffects : Platform.Router msg Msg -> List (MyCmd msg) -> List (MySub msg) -> State msg -> Task Never (State msg)
+onEffects router cmdList subList state =
+  makeSubs router subList { state | socketSubs = [] }
+  |> andThen (startHttpServerIfNeeded router)
+  |> andThen (handleCommands router cmdList)
 
-onEffects
-  : Platform.Router msg Msg
-  -> List (MyCmd msg)
-  -> List (MySub msg)
-  -> State msg
-  -> Task Never (State msg)
-onEffects router cmds subs state =
-  let
-    -- things to listen to if not already
-    newSubs =
-      buildSubDict subs Dict.empty
+makeSubs : Platform.Router msg Msg -> List (MySub msg) -> State msg -> Task Never (State msg)
+makeSubs router subList state = case subList of
+  Listen portNumber tagger :: subs -> case state.httpSub of
+    Nothing -> makeSubs router subs { state | httpSub = Just (portNumber, tagger) }
+    _ -> makeSubs router subs state
+  ListenSocket tagger :: subs -> makeSubs router subs { state | socketSubs = tagger :: state.socketSubs }
+  [] -> Task.succeed state
 
-    cleanup _ =
-      let
-        newEntries = (Dict.map (\k v -> []) newSubs)
+startHttpServerIfNeeded : Platform.Router msg Msg -> State msg -> Task Never (State msg)
+startHttpServerIfNeeded router state = case state.server of
+  Nothing -> case state.httpSub of
+    Just (portNumber, tagger) ->  Platform.sendToSelf router (StartServer portNumber) |> andThen (\_ -> Task.succeed state)
+    _ -> Task.succeed state
+  _ -> Task.succeed state
 
-        leftStep portNumber _ getNewServers =
-          getNewServers
-            |> Task.andThen (\newServers -> attemptOpen router portNumber
-            |> Task.andThen (\pid -> Task.succeed (Dict.insert portNumber (Opening pid) newServers)))
-
-        bothStep portNumber _ server getNewServers =
-          Task.map (Dict.insert portNumber server) getNewServers
-
-        rightStep portNumber server getNewServers =
-          close server &> getNewServers
-      in
-        Dict.merge leftStep bothStep rightStep newEntries state.servers (Task.succeed Dict.empty)
-          |> Task.andThen (\newServers -> Task.succeed (State newServers newSubs))
-
-  in
-    sendReplies cmds |> Task.andThen cleanup
-
-
-
-
-sendReplies : List (MyCmd msg) -> Task x ()
-sendReplies cmds =
-  case cmds of
-    [] ->
-      Task.succeed ()
-
-    Reply request msg :: rest ->
-      Http.reply request msg
-        &> sendReplies rest
-
-    ReplyFile request filename :: rest ->
-      Http.replyFile request filename
-        &> sendReplies rest
-
-    Broadcast message :: rest ->
-      Http.broadcast message
-        &> sendReplies rest
-
-
-buildSubDict : List (MySub msg) -> SubsDict msg -> SubsDict msg
-buildSubDict subs dict =
-  case subs of
-    [] ->
-      dict
-
-    Listen portNumber tagger :: rest ->
-      buildSubDict rest (Dict.update portNumber (add tagger) dict)
-
-add : a -> Maybe (List a) -> Maybe (List a)
-add value maybeList =
-  case maybeList of
-    Nothing ->
-      Just [value]
-
-    Just list ->
-      Just (value :: list)
-
+handleCommands : Platform.Router msg Msg -> List (MyCmd msg) -> State msg -> Task Never (State msg)
+handleCommands router cmdList state = case cmdList of
+  [] -> Task.succeed state
+  Reply request msg :: cmds -> Http.reply request msg |> andThen (\_ -> handleCommands router cmds state)
+  ReplyFile request filename :: cmds -> Http.replyFile request filename |> andThen (\_ -> handleCommands router cmds state)
+  Broadcast server message :: cmds -> Http.broadcast server message |> andThen (\_ -> handleCommands router cmds state)
+  Send server cid message :: cmds -> Http.send server cid message |> andThen (\_ -> handleCommands router cmds state)
 
 
 -- HANDLE SELF MESSAGES
 
 
-type Msg
-  = Request Int Request
-  | Die Int
-  | Open Int Http.Server
+type Msg = StartServer Int |
+           OnStart Http.Server | OnRequest Request | OnMessage Int String | OnClose Int
 
 
 onSelfMsg : Platform.Router msg Msg -> Msg -> State msg -> Task Never (State msg)
 onSelfMsg router selfMsg state =
   case selfMsg of
-    Request portNumber request ->
-      let
-        requests =
-          Dict.get portNumber state.subs
-            |> Maybe.withDefault []
-            |> List.map (\tagger -> Platform.sendToApp router (tagger request))
-      in
-        Task.sequence requests &> Task.succeed state
+    OnRequest request -> case state.httpSub of
+      Just (_, tagger) -> Platform.sendToApp router (tagger request) |> Task.andThen (\_ -> Task.succeed state)
+      _ -> Task.succeed state
 
-    Die portNumber ->
-      case Dict.get portNumber state.servers of
-        Nothing ->
-          Task.succeed state
+    OnClose portNumber ->
+      Task.succeed state
 
-        Just _ ->
-          attemptOpen router portNumber
-            |> Task.andThen (\pid -> Task.succeed (updateServer portNumber (Opening pid) state))
+    OnMessage clientId message ->
+      case state.socketServer of
+        Just socketServer ->
+          let messages = List.map (\tagger -> Platform.sendToApp router (tagger (socketServer,clientId,message))) state.socketSubs
+          in Task.sequence messages
+            |> Task.andThen (\_ -> Task.succeed state)
+        _ -> Task.succeed state
 
-    Open portNumber server ->
-      Task.succeed (updateServer portNumber (Listening server) state)
+    StartServer portNumber -> start router portNumber |> andThen (\_ -> Task.succeed state)
+    OnStart server -> openSocketIfNeeded router { state | server = Just server } server
+-- START WEBSOCKETSERVER
 
 
-removeServer : Int -> State msg -> State msg
-removeServer portNumber state =
-  { state | servers = Dict.remove portNumber state.servers }
+openSocketIfNeeded : Platform.Router msg Msg -> State msg -> Http.Server -> Task Never (State msg)
+openSocketIfNeeded router state server =
+  case state.socketSubs of
+    tagger :: _ -> Http.openSocket server { onMessage = \message -> Platform.sendToSelf router (OnMessage message.clientId message.data) }
+      |> andThen (\socketServer -> Task.succeed { state | socketServer = Just socketServer})
+    _ -> Task.succeed state
 
+-- START SERVER
 
-updateServer : Int -> Server -> State msg -> State msg
-updateServer portNumber server state =
-  { state | servers = Dict.insert portNumber server state.servers }
-
-
-attemptOpen : Platform.Router msg Msg -> Int -> Task x Process.Id
-attemptOpen router portNumber =
-  let
-    actuallyAttemptOpen =
-      open router portNumber
-        |> Task.andThen (\server -> Platform.sendToSelf router (Open portNumber server))
-  in
-    Process.spawn actuallyAttemptOpen
-
-
-open : Platform.Router msg Msg -> Int -> Task x Http.Server
-open router portNumber =
-  Http.listen portNumber
-    { onRequest = \request -> Platform.sendToSelf router (Request portNumber request)
-    , onClose = \_ -> Platform.sendToSelf router (Die portNumber)
-    }
-
+start : Platform.Router msg Msg -> Int -> Task x Process.Id
+start router portNumber =
+  Process.spawn (Http.listen portNumber
+    { onRequest = \request -> Platform.sendToSelf router (OnRequest request)
+    , onClose = \_ -> Platform.sendToSelf router (OnClose portNumber)
+    } |> andThen (\server -> Platform.sendToSelf router (OnStart server) ))
 
 -- CLOSE SERVER
 
-
-close : Server -> Task x ()
-close server =
-  case server of
-    Opening pid ->
-      Process.kill pid
-
-    Listening server ->
-      Http.close server
+close : Http.Server -> Task x ()
+close server = Http.close server
