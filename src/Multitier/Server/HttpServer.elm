@@ -1,4 +1,4 @@
-effect module HttpServer where { command = MyCmd, subscription = MySub } exposing
+effect module Multitier.Server.HttpServer where { command = MyCmd, subscription = MySub } exposing
   ( reply
   , replyFile
   , listen
@@ -13,7 +13,7 @@ import Dict
 import Process
 import Task exposing (Task)
 import Json.Encode as Encode exposing (Value)
-import HttpServer.LowLevel as Http
+import Multitier.Server.HttpServer.LowLevel as Http
 
 -- type alias Server = Http.Server
 

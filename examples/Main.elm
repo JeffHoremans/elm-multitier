@@ -9,15 +9,14 @@ import Time exposing (Time, second)
 import Multitier exposing (MultitierCmd(..), Config, none, batch, performOnServer, map, (!!))
 import Multitier.Procedure as Procedure exposing (procedure, Procedure)
 import Multitier.Error exposing (Error(..))
-import Server.Console as Console
+import Multitier.Server.Console as Console
 
 import Counter
 
 -- MULTITIER - CONFIG
 
 config: Config
-config = { httpPort = 8081
-         , hostname = "localhost" }
+config = { httpPort = 8081, hostname = "localhost" }
 
 -- MULTITIER - PROCEDURES
 
@@ -50,10 +49,10 @@ serverSubscriptions serverModel = Sub.batch [Time.every 10000 (always ServerTick
 
 -- INPUT
 
-type alias Input = { messages: List String }
+type alias ServerState = { messages: List String }
 
-serverState: ServerModel -> Input
-serverState {messages} = Input messages
+serverState: ServerModel -> ServerState
+serverState {messages} = ServerState messages
 
 -- MODEL
 
@@ -62,16 +61,13 @@ type alias Model = { input: String
                    , error: String
                    , counter: Counter.Model }
 
-init : Input -> ( Model, MultitierCmd Proc Msg)
+init : ServerState -> ( Model, MultitierCmd Proc Msg)
 init {messages} = let (counter, cmds) = Counter.init
        in (Model "" messages "" counter,  batch [ map CounterProc CounterMsg cmds ])
 
 type Msg = OnInput String | Send |
            Handle (Result Error ()) |
            CounterMsg Counter.Msg | None
-
-stateUpdate : Input -> Model -> ( Model, MultitierCmd Proc Msg)
-stateUpdate {messages} model = ({ model | messages = messages}, none)
 
 update : Msg -> Model -> ( Model, MultitierCmd Proc Msg )
 update msg model =

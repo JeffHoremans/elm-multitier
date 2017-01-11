@@ -1,4 +1,4 @@
-var _JeffHoremans$elm_multitier$Native_Server_File = (function() {
+var _JeffHoremans$elm_multitier$Native_Multitier_Server_File = (function() {
 
   var Utils =  _elm_lang$core$Native_Utils;
   var Scheduler = _elm_lang$core$Native_Scheduler;

@@ -11,7 +11,6 @@ main =
         , init = init
         , view = view
         , update = update
-        , stateUpdate = stateUpdate
         , subscriptions = subscriptions
         , initServer = initServer
         , serverState = serverState
