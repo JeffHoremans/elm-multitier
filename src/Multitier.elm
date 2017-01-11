@@ -202,8 +202,9 @@ handle serverState procedures request model =
                                     Err _ ->    Reply request "Invalid request" Nothing
                                     _     ->    ReplyFile request "examples/index.html")
                                  (File.write "examples/state.js" ("let state="++ (toString (Encode.encode 0 (toJSON (serverState model)))))))
-      ["client.js"] -> (model, HttpServer.replyFile request "examples/client.js")
-      ["state.js"] -> (model, HttpServer.replyFile request "examples/state.js")
+      [filename] -> case File.exists ("examples/" ++  filename) of
+        True -> (model, HttpServer.replyFile request ("examples/" ++  filename))
+        _ -> invalidRequest "File not found."
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
       ["procedure"] -> let (Proc _ toTask) = procedures (fromJSONString request.body) in

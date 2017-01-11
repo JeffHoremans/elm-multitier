@@ -173,45 +173,35 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
   } else {
 
       var listen = function(port, handlers) {
-        return Scheduler.nativeBinding(function(callback) {
-          return callback(Scheduler.fail(Utils.Tuple0));
-        });
+        throwError()
       }
 
       var reply = function(request, string) {
-        return Scheduler.nativeBinding(function(callback) {
-          return callback(Scheduler.fail(Utils.Tuple0));
-        });
+        throwError()
       }
 
       var replyFile = function(request, filename) {
-        return Scheduler.nativeBinding(function(callback) {
-          return callback(Scheduler.fail(Utils.Tuple0));
-        });
+        throwError()
       }
 
       var openSocket = function(server, handlers) {
-        return Scheduler.nativeBinding(function(callback) {
-          return callback(Scheduler.fail(Utils.Tuple0));
-        });
+        throwError()
       }
 
       var broadcast = function(server, message) {
-        return Scheduler.nativeBinding(function(callback) {
-          return callback(Scheduler.fail(Utils.Tuple0));
-        });
+        throwError()
       }
 
       var send = function(server, cid, message) {
-        return Scheduler.nativeBinding(function(callback) {
-          return callback(Scheduler.fail(Utils.Tuple0));
-        });
+        throwError()
       }
 
       var close = function(server) {
-        return Scheduler.nativeBinding(function(callback) {
-          return callback(Scheduler.fail(Utils.Tuple0));
-        });
+        throwError()
+      }
+
+      var throwError = function(){
+        throw new Error("Not on Node environment!")
       }
 
       return {
