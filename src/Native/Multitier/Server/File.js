@@ -30,23 +30,37 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_File = (function() {
       });
     }
 
+    var exists = function(path) {
+      return fs.existsSync(path)
+    }
+
     return {
       read: read,
-      write: F2(write)
+      write: F2(write),
+      exists: exists
     };
   } else {
 
   	var read = function(path) {
-  		throw new Error("Not on Node environment")
+  		throwError()
   	}
 
   	var write = function(path, data) {
-  		throw new Error("Not on Node environment")
+  		throwError()
   	}
+
+    var exists = function(path){
+      throwError()
+    }
+
+    var throwError = function(){
+      throw new Error("Not on Node environment!")
+    }
 
   	return {
   		read: read,
-  		write: F2(write)
+  		write: F2(write),
+      exists: exists
     };
 
   }
