@@ -80,7 +80,7 @@ encodeResponse response = Encode.object
 type alias Config = { httpPort: Int
                     , hostname: String }
 
-unbatch : Config -> (procedure -> Procedure serverModel msg) -> MultitierCmd procedure msg -> Cmd msg
+unbatch : Config -> (procedure -> Procedure serverModel msg serverMsg) -> MultitierCmd procedure msg -> Cmd msg
 unbatch config proceduresMap mtcmd =
   case mtcmd of
     ServerCmd procedure ->
@@ -101,14 +101,14 @@ type ClientMsg msg = ClientUserMsg msg
 
 unwrapInit :
      Config
-  -> (procedure -> Procedure serverModel msg)
+  -> (procedure -> Procedure serverModel msg serverMsg)
   -> ( model, MultitierCmd procedure msg)
   -> ( model, Cmd msg )
 unwrapInit config proceduresMap ( model, cmds) = (model, unbatch config proceduresMap cmds)
 
 unwrapInitWithFlags :
      Config
-  -> (procedure -> Procedure serverModel msg)
+  -> (procedure -> Procedure serverModel msg serverMsg)
   -> (input -> ( model, MultitierCmd procedure msg))
   -> (String -> ( model, Cmd msg ))
 unwrapInitWithFlags config proceduresMap init =
@@ -119,7 +119,7 @@ unwrapInitWithFlags config proceduresMap init =
 
 unwrapUpdate :
      Config
-  -> (procedure -> Procedure serverModel msg)
+  -> (procedure -> Procedure serverModel msg serverMsg)
   -> (msg -> model -> ( model, MultitierCmd procedure msg ))
   -> (msg -> model -> ( model, Cmd msg ))
 unwrapUpdate config proceduresMap update =
@@ -129,15 +129,12 @@ unwrapUpdate config proceduresMap update =
 
 clientProgram :
        { config: Config
-       , init : serverState -> ( model, MultitierCmd proc msg )
-       , update : msg -> model -> ( model, MultitierCmd proc msg )
+       , init : serverState -> ( model, MultitierCmd serverMsg msg )
+       , update : msg -> model -> ( model, MultitierCmd serverMsg msg )
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
-       , initServer: serverModel
        , serverState : serverModel -> serverState
-       , procedures : proc -> Procedure serverModel msg
-       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
-       , serverSubscriptions : serverModel -> Sub serverMsg
+       , procedures : serverMsg -> Procedure serverModel msg serverMsg
        }
     -> Program String model (ClientMsg msg)
 clientProgram stuff =
@@ -163,20 +160,16 @@ clientProgram stuff =
 
 serverProgram :
        { config: Config
-       , init : input -> ( model, MultitierCmd proc msg )
-       , update : msg -> model -> ( model, MultitierCmd proc msg )
-       , subscriptions : model -> Sub msg
-       , view : model -> Html msg
-       , initServer: serverModel
+       , initServer: (serverModel, Cmd serverMsg)
        , serverState : serverModel -> input
-       , procedures : proc -> Procedure serverModel msg
-       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
+       , procedures : serverMsg -> Procedure serverModel msg serverMsg
        , serverSubscriptions : serverModel -> Sub serverMsg
        }
     -> Program Never serverModel (ServerMsg serverMsg)
 serverProgram stuff =
-    let update = stuff.updateServer in
-    let wrapInit =  (stuff.initServer, Cmd.none)
+    let update = (\serverMsg serverModel -> let (Proc handlers updateServer) = stuff.procedures serverMsg in
+                                            let (newServerModel, task, cmd) = updateServer serverModel in (newServerModel, cmd)) in
+    let wrapInit = let (model, cmds) = stuff.initServer in (model, Cmd.map ServerUserMsg cmds)
         wrapUpdate msg model =
           case msg of
             ServerUserMsg userMsg -> updateHelp ServerUserMsg <| update userMsg model
@@ -192,7 +185,7 @@ serverProgram stuff =
           , subscriptions = wrapSubscriptions
           }
 
-handle : (serverModel -> input) -> (procedure -> Procedure serverModel msg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
+handle : (serverModel -> input) -> (serverMsg -> Procedure serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
 handle serverState procedures request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
@@ -207,11 +200,11 @@ handle serverState procedures request model =
         _ -> invalidRequest "File not found."
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
-      ["procedure"] -> let (Proc _ toTask) = procedures (fromJSONString request.body) in
-        let (newModel, task) = toTask model in
-          (newModel, Task.attempt (\result -> case result of
-                                    Err _ ->      Reply request "Procedure failed" Nothing
-                                    Ok value ->   Reply request "" (Just value)) task)
+      ["procedure"] -> let (Proc _ update) = procedures (fromJSONString request.body) in
+        let (newModel, task, cmd) = update model in
+          (newModel, Cmd.batch [ Cmd.map ServerUserMsg cmd, Task.attempt (\result -> case result of
+                                      Err _ ->      Reply request "Procedure failed" Nothing
+                                      Ok value ->   Reply request "" (Just value)) task])
       _ -> invalidRequest "Invalid request"
     _ -> invalidRequest "Invalid request"
 
