@@ -7,13 +7,10 @@ main : Program String Model (Multitier.ClientMsg Msg)
 main =
     Multitier.clientProgram
         { config = config
-        , procedures = procedures
         , init = init
         , view = view
         , update = update
         , subscriptions = subscriptions
-        , initServer = initServer
         , serverState = serverState
-        , updateServer = updateServer
-        , serverSubscriptions = serverSubscriptions
+        , procedures = procedures
         }

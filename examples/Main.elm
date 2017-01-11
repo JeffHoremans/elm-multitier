@@ -5,6 +5,8 @@ import Html.Events as E
 import Html.Attributes
 import Task exposing (Task)
 import Time exposing (Time, second)
+import WebSocket
+import String
 
 import Multitier exposing (MultitierCmd(..), Config, none, batch, performOnServer, map, (!!))
 import Multitier.Procedure as Procedure exposing (procedure, Procedure)
@@ -21,36 +23,53 @@ config = { httpPort = 8081, hostname = "localhost" }
 
 -- MULTITIER - PROCEDURES
 
-type alias ServerModel = { messages: List String
+type alias ServerModel = { socketServer: Maybe SocketServer
+                         , messages: List String
                          , counter: Counter.ServerModel }
 
-initServer : ServerModel
-initServer = ServerModel [] Counter.initServer
+initServer : (ServerModel, Cmd ServerMsg)
+initServer = ServerModel Maybe.Nothing [] Counter.initServer ! []
 
-type Proc = Log String | SendMessage String | CounterProc Counter.Proc
+type ServerMsg = Log String | SendMessage String |
+                 ServerTick | OnMessage (Int,String) | OnSocketOpen SocketServer |
+                 CounterServerMsg Counter.ServerMsg |
+                 Nothing
 
-procedures : Proc -> Procedure ServerModel Msg
+procedures : ServerMsg -> Procedure ServerModel Msg ServerMsg
 procedures proc = case proc of
-  Log val ->              procedure Handle (\serverModel -> (serverModel, Console.log val))
-  SendMessage message ->  procedure Handle (\serverModel -> let newMessages = message :: serverModel.messages in
-                                           ({ serverModel | messages = newMessages }, Task.succeed ()))
-  CounterProc proc ->     Procedure.map CounterMsg (\counter serverModel -> { serverModel | counter = counter})
-                                                   (\serverModel -> serverModel.counter) (Counter.proceduresMap proc)
+  Log val ->
+    procedure Handle (\serverModel -> (serverModel, Task.succeed (), Console.log val))
+  SendMessage message ->
+    procedure Handle (\serverModel -> let newMessages = message :: serverModel.messages in
+                                           ({ serverModel | messages = newMessages }, Task.succeed (), broadcast serverModel (String.join "," newMessages)))
 
-type ServerMsg = ServerTick | OnMessage (SocketServer,Int,String) | CounterServerMsg Counter.ServerMsg | Nothing
+  ServerTick ->
+    procedure Handle (\serverModel -> (serverModel, Task.succeed (), Console.log (toString serverModel.messages)))
+  OnMessage (cid,message) ->
+    procedure Handle (\serverModel -> (serverModel, Task.succeed (),
+      Cmd.batch [ Console.log message]))
+  OnSocketOpen socketServer ->
+    procedure Handle (\serverModel -> ({ serverModel | socketServer = Just socketServer }, Task.succeed (), Cmd.none))
 
-updateServer : ServerMsg -> ServerModel -> (ServerModel, Cmd ServerMsg)
-updateServer msg serverModel = case msg of
-  ServerTick -> serverModel ! [Task.perform (always Nothing) (Console.log (toString serverModel.messages))]
-  CounterServerMsg msg -> let (counter, cmds) = Counter.updateServer msg serverModel.counter in { serverModel | counter = counter} ! [Cmd.map CounterServerMsg cmds]
-  OnMessage (server,cid,message) -> serverModel ! [Task.attempt (always Nothing) (Console.log message), ServerWebSocket.multicast server [0,1] message]
-  Nothing -> serverModel ! []
+
+  CounterServerMsg msg ->
+    Procedure.map CounterMsg CounterServerMsg
+     (\counter serverModel -> { serverModel | counter = counter})
+     (\serverModel -> serverModel.counter) (Counter.procedures msg)
+
+  Nothing ->
+    procedure Handle (\serverModel -> (serverModel, Task.succeed (), Cmd.none))
 
 serverSubscriptions : ServerModel -> Sub ServerMsg
 serverSubscriptions serverModel =
   Sub.batch [ Time.every 10000 (always ServerTick)
-            , ServerWebSocket.listen OnMessage
+            , ServerWebSocket.listen OnSocketOpen OnMessage
             , Sub.map CounterServerMsg (Counter.serverSubscriptions serverModel.counter)]
+
+broadcast : ServerModel -> String -> Cmd ServerMsg
+broadcast serverModel message = case serverModel.socketServer of
+  Just server -> ServerWebSocket.broadcast server message
+  _ -> Cmd.none
 
 -- INPUT
 
@@ -66,15 +85,15 @@ type alias Model = { input: String
                    , error: String
                    , counter: Counter.Model }
 
-init : ServerState -> ( Model, MultitierCmd Proc Msg)
+init : ServerState -> ( Model, MultitierCmd ServerMsg Msg)
 init {messages} = let (counter, cmds) = Counter.init
-       in (Model "" messages "" counter,  batch [ map CounterProc CounterMsg cmds ])
+       in (Model "" messages "" counter,  batch [ map CounterServerMsg CounterMsg cmds ])
 
 type Msg = OnInput String | Send |
-           Handle (Result Error ()) |
+           Handle (Result Error ()) | SetMessages String |
            CounterMsg Counter.Msg | None
 
-update : Msg -> Model -> ( Model, MultitierCmd Proc Msg )
+update : Msg -> Model -> ( Model, MultitierCmd ServerMsg Msg )
 update msg model =
     case msg of
       OnInput text -> ({ model | input = text}, none)
@@ -82,13 +101,16 @@ update msg model =
       Handle result -> case result of
         Ok _ -> model !! []
         _ -> { model | error = "error" } !! []
-      CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter in { model | counter = counter } !! [ map CounterProc CounterMsg cmds ]
+      SetMessages messages -> ({model | messages = String.split "," messages}, none)
+
+
+      CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter in { model | counter = counter } !! [ map CounterServerMsg CounterMsg cmds ]
       None -> ( model, none )
 
 -- SUBSCRIPTIONS
 
 subscriptions : Model -> Sub Msg
-subscriptions model = Sub.batch [Sub.map CounterMsg (Counter.subscriptions model.counter)]
+subscriptions model = Sub.batch [WebSocket.listen "ws://localhost:8081" SetMessages, Sub.map CounterMsg (Counter.subscriptions model.counter)]
 
 -- VIEW
 

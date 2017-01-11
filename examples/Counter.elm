@@ -18,28 +18,23 @@ type alias ServerModel = { test: String }
 initServer : ServerModel
 initServer = ServerModel ""
 
-type Proc = Add Int Int
+type ServerMsg = Add Int Int
 
-proceduresMap : Proc -> Procedure ServerModel Msg
-proceduresMap proc = case proc of
-  Add a b -> procedure Handle (\serverModel -> (serverModel, Task.succeed (a + b)))
-
-type ServerMsg = Nothing
-
-updateServer : ServerMsg -> ServerModel -> (ServerModel, Cmd ServerMsg)
-updateServer _ serverModel = serverModel ! []
+procedures : ServerMsg -> Procedure ServerModel Msg ServerMsg
+procedures proc = case proc of
+  Add a b -> procedure Handle (\serverModel -> (serverModel, Task.succeed (a + b), Cmd.none))
 
 serverSubscriptions : ServerModel -> Sub ServerMsg
 serverSubscriptions model = Sub.none
 
 -- MODEL
 
-init : ( Model, MultitierCmd Proc Msg)
+init : ( Model, MultitierCmd ServerMsg Msg)
 init = Model 0 "" !! []
 
 type Msg = Handle (Result Error Int) | Increment | None
 
-update : Msg -> Model -> ( Model, MultitierCmd Proc Msg )
+update : Msg -> Model -> ( Model, MultitierCmd ServerMsg Msg )
 update msg model =
     case msg of
       Handle result -> case result of
