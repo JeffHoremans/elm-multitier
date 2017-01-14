@@ -10,4 +10,5 @@ main =
         , initServer = initServer
         , serverState = serverState
         , procedures = procedures
+        , updateServer = updateServer
         , serverSubscriptions = serverSubscriptions }

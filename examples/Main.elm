@@ -30,35 +30,33 @@ type alias ServerModel = { socketServer: Maybe SocketServer
 initServer : (ServerModel, Cmd ServerMsg)
 initServer = ServerModel Maybe.Nothing [] Counter.initServer ! []
 
-type ServerMsg = Log String | SendMessage String |
-                 ServerTick | OnMessage (Int,String) | OnSocketOpen SocketServer |
-                 CounterServerMsg Counter.ServerMsg |
-                 Nothing
+type RemoteProcedure = Log String | SendMessage String | ServerProc Counter.RemoteProcedure
 
-procedures : ServerMsg -> Procedure ServerModel Msg ServerMsg
-procedures proc = case proc of
+procedures : RemoteProcedure -> Procedure ServerModel Msg ServerMsg
+procedures rproc = case rproc of
   Log val ->
     procedure Handle (\serverModel -> (serverModel, Task.succeed (), Console.log val))
   SendMessage message ->
     procedure Handle (\serverModel -> let newMessages = message :: serverModel.messages in
                                            ({ serverModel | messages = newMessages }, Task.succeed (), broadcast serverModel (String.join "," newMessages)))
-
-  ServerTick ->
-    procedure Handle (\serverModel -> (serverModel, Task.succeed (), Console.log (toString serverModel.messages)))
-  OnMessage (cid,message) ->
-    procedure Handle (\serverModel -> (serverModel, Task.succeed (),
-      Cmd.batch [ Console.log message]))
-  OnSocketOpen socketServer ->
-    procedure Handle (\serverModel -> ({ serverModel | socketServer = Just socketServer }, Task.succeed (), Cmd.none))
+  ServerProc proc ->
+    Procedure.map CounterMsg CounterServerMsg (\counter serverModel -> { serverModel | counter = counter}) (\serverModel -> serverModel.counter) (Counter.remoteProcedures proc)
 
 
-  CounterServerMsg msg ->
-    Procedure.map CounterMsg CounterServerMsg
-     (\counter serverModel -> { serverModel | counter = counter})
-     (\serverModel -> serverModel.counter) (Counter.procedures msg)
+type ServerMsg = ServerTick | OnMessage (Int,String) | OnSocketOpen SocketServer |
+                 CounterServerMsg Counter.ServerMsg |
+                 Nothing
 
-  Nothing ->
-    procedure Handle (\serverModel -> (serverModel, Task.succeed (), Cmd.none))
+updateServer : ServerMsg -> ServerModel -> (ServerModel, Cmd ServerMsg)
+updateServer serverMsg serverModel = case serverMsg of
+  ServerTick ->                 serverModel ! [Console.log (toString serverModel.messages)]
+  OnMessage (cid,message) ->    serverModel ! [ Console.log message]
+  OnSocketOpen socketServer ->  { serverModel | socketServer = Just socketServer } ! []
+
+  CounterServerMsg msg ->      let (counter, cmd) = Counter.updateServer msg serverModel.counter in
+                                { serverModel | counter = counter } ! [ Cmd.map CounterServerMsg cmd]
+
+  Nothing ->                    serverModel ! []
 
 serverSubscriptions : ServerModel -> Sub ServerMsg
 serverSubscriptions serverModel =
@@ -85,15 +83,15 @@ type alias Model = { input: String
                    , error: String
                    , counter: Counter.Model }
 
-init : ServerState -> ( Model, MultitierCmd ServerMsg Msg)
+init : ServerState -> ( Model, MultitierCmd RemoteProcedure Msg)
 init {messages} = let (counter, cmds) = Counter.init
-       in (Model "" messages "" counter,  batch [ map CounterServerMsg CounterMsg cmds ])
+       in (Model "" messages "" counter,  batch [ map ServerProc CounterMsg cmds ])
 
 type Msg = OnInput String | Send |
            Handle (Result Error ()) | SetMessages String |
            CounterMsg Counter.Msg | None
 
-update : Msg -> Model -> ( Model, MultitierCmd ServerMsg Msg )
+update : Msg -> Model -> ( Model, MultitierCmd RemoteProcedure Msg )
 update msg model =
     case msg of
       OnInput text -> ({ model | input = text}, none)
@@ -104,7 +102,7 @@ update msg model =
       SetMessages messages -> ({model | messages = String.split "," messages}, none)
 
 
-      CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter in { model | counter = counter } !! [ map CounterServerMsg CounterMsg cmds ]
+      CounterMsg subMsg -> let (counter, cmds) = Counter.update subMsg model.counter in { model | counter = counter } !! [ map ServerProc CounterMsg cmds ]
       None -> ( model, none )
 
 -- SUBSCRIPTIONS

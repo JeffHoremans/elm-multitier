@@ -129,12 +129,12 @@ unwrapUpdate config proceduresMap update =
 
 clientProgram :
        { config: Config
-       , init : serverState -> ( model, MultitierCmd serverMsg msg )
-       , update : msg -> model -> ( model, MultitierCmd serverMsg msg )
+       , init : serverState -> ( model, MultitierCmd proc msg )
+       , update : msg -> model -> ( model, MultitierCmd proc msg )
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        , serverState : serverModel -> serverState
-       , procedures : serverMsg -> Procedure serverModel msg serverMsg
+       , procedures : proc -> Procedure serverModel msg serverMsg
        }
     -> Program String model (ClientMsg msg)
 clientProgram stuff =
@@ -162,13 +162,13 @@ serverProgram :
        { config: Config
        , initServer: (serverModel, Cmd serverMsg)
        , serverState : serverModel -> input
-       , procedures : serverMsg -> Procedure serverModel msg serverMsg
+       , procedures : proc -> Procedure serverModel msg serverMsg
+       , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
        }
     -> Program Never serverModel (ServerMsg serverMsg)
 serverProgram stuff =
-    let update = (\serverMsg serverModel -> let (Proc handlers updateServer) = stuff.procedures serverMsg in
-                                            let (newServerModel, task, cmd) = updateServer serverModel in (newServerModel, cmd)) in
+    let update = stuff.updateServer in
     let wrapInit = let (model, cmds) = stuff.initServer in (model, Cmd.map ServerUserMsg cmds)
         wrapUpdate msg model =
           case msg of
@@ -185,7 +185,7 @@ serverProgram stuff =
           , subscriptions = wrapSubscriptions
           }
 
-handle : (serverModel -> input) -> (serverMsg -> Procedure serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
+handle : (serverModel -> input) -> (procedure -> Procedure serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
 handle serverState procedures request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
