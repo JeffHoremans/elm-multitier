@@ -120,8 +120,6 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
 
       var send = function(server, cid, message) {
         return Scheduler.nativeBinding(function(callback) {
-          console.log("REPLYING!!!!!!!!")
-          console.log(cid)
           if(active_connections[cid]){
             active_connections[cid].sendUTF(message)
             callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
@@ -141,11 +139,10 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
       var replyFile = function(request, filename) {
         return Scheduler.nativeBinding(function(callback) {
           try {
-            var readStream = fs.createReadStream(filename);
+            var readStream = fs.createReadStream(__dirname + '/' + filename);
             readStream.pipe(request.rawRequest.response);
             callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
           } catch (err) {
-            console.log(err)
             request.rawRequest.response.end()
             callback(Scheduler.fail(Utils.Tuple0));
           }
