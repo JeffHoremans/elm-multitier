@@ -161,8 +161,3 @@ start router portNumber =
     { onRequest = \request -> Platform.sendToSelf router (OnRequest request)
     , onClose = \_ -> Platform.sendToSelf router (OnClose portNumber)
     } |> andThen (\server -> Platform.sendToSelf router (OnStart server) ))
-
--- CLOSE SERVER
-
-close : Http.Server -> Task x ()
-close server = Http.close server

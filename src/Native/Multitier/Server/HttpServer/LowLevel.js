@@ -152,23 +152,13 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
         })
       }
 
-      var close = function(server) {
-        return Scheduler.nativeBinding(function (callback) {
-
-          server.close();
-
-          callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
-        });
-      }
-
       return {
         listen: F2(listen),
         reply: F2(reply),
         replyFile: F2(replyFile),
         openSocket: F2(openSocket),
         broadcast: F2(broadcast),
-        send: F3(send),
-        close: close
+        send: F3(send)
       };
   } else {
 
@@ -210,8 +200,7 @@ var _JeffHoremans$elm_multitier$Native_Multitier_Server_HttpServer_LowLevel = fu
         replyFile: F2(replyFile),
         openSocket: F2(openSocket),
         broadcast: F2(broadcast),
-        send: F3(send),
-        close: close
+        send: F3(send)
       };
 
   }

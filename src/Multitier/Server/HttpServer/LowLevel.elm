@@ -6,7 +6,6 @@ module Multitier.Server.HttpServer.LowLevel exposing
   , replyFile
   , broadcast
   , send
-  , close
   , Server
   , SocketServer
   , Request
@@ -59,6 +58,3 @@ broadcast server message = Native.Multitier.Server.HttpServer.LowLevel.broadcast
 
 send : SocketServer -> ClientId -> String -> Task x ()
 send server cid message = Native.Multitier.Server.HttpServer.LowLevel.send server cid message
-
-close : Server -> Task x ()
-close = Native.Multitier.Server.HttpServer.LowLevel.close
