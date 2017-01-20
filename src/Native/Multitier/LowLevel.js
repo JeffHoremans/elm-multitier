@@ -1,4 +1,4 @@
-var _JeffHoremans$elm_multitier$Native_Multitier_LowLevel = (function() {
+var _user$project$Native_Multitier_LowLevel = (function() {
 
   var toJSON = function(x) {
       try {
