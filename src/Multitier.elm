@@ -233,9 +233,9 @@ handle serverState procedures request model =
       [] -> (model, Task.attempt (\result -> case result of
                                     Err _ ->    Reply request "Invalid request" Nothing
                                     _     ->    ReplyFile request "index.html")
-                                 (File.write "examples/state.js" ("let state="++ (toString (Encode.encode 0 (toJSON (serverState model)))))))
+                                 (File.write "state.js" ("let state="++ (toString (Encode.encode 0 (toJSON (serverState model)))))))
       [filename] -> case File.exists filename of
-        True -> (model, HttpServer.replyFile request ("examples/" ++  filename))
+        True -> (model, HttpServer.replyFile request filename)
         _ -> invalidRequest "File not found."
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
