@@ -26,7 +26,7 @@ import String
 import Multitier.Server.HttpServer as HttpServer
 import Multitier.Server.HttpServer.Utils exposing (Method(..))
 import Multitier.Error exposing (Error(..))
-import Multitier.Procedure exposing (..)
+import Multitier.RemoteProcedure exposing (..)
 import Multitier.Server.File as File
 import Multitier.LowLevel as LowLevel exposing (fromJSON, toJSON, fromJSONString)
 
@@ -96,7 +96,7 @@ program :
   , subscriptions : model -> Sub msg
   , view : model -> Html msg
   , serverState : serverModel -> serverState
-  , procedures : proc -> Procedure serverModel msg serverMsg
+  , procedures : proc -> RemoteProcedure serverModel msg serverMsg
   , initServer: (serverModel, Cmd serverMsg)
   , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
   , serverSubscriptions : serverModel -> Sub serverMsg
@@ -120,7 +120,7 @@ clientStuff :
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        , serverState : serverModel -> serverState
-       , procedures : proc -> Procedure serverModel msg serverMsg
+       , procedures : proc -> RemoteProcedure serverModel msg serverMsg
        , initServer: (serverModel, Cmd serverMsg)
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
@@ -154,7 +154,7 @@ serverStuff :
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        , serverState : serverModel -> serverState
-       , procedures : proc -> Procedure serverModel msg serverMsg
+       , procedures : proc -> RemoteProcedure serverModel msg serverMsg
        , initServer: (serverModel, Cmd serverMsg)
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
@@ -180,7 +180,7 @@ serverStuff stuff =
        , subscriptions = wrapSubscriptions
        }
 
-unbatch : Config -> (procedure -> Procedure serverModel msg serverMsg) -> MultitierCmd procedure msg -> Cmd msg
+unbatch : Config -> (procedure -> RemoteProcedure serverModel msg serverMsg) -> MultitierCmd procedure msg -> Cmd msg
 unbatch config proceduresMap mtcmd =
   case mtcmd of
     ServerCmd procedure ->
@@ -197,14 +197,14 @@ unbatch config proceduresMap mtcmd =
 
 unwrapInit :
      Config
-  -> (procedure -> Procedure serverModel msg serverMsg)
+  -> (procedure -> RemoteProcedure serverModel msg serverMsg)
   -> ( model, MultitierCmd procedure msg)
   -> ( model, Cmd msg )
 unwrapInit config proceduresMap ( model, cmds) = (model, unbatch config proceduresMap cmds)
 
 unwrapInitWithFlags :
      Config
-  -> (procedure -> Procedure serverModel msg serverMsg)
+  -> (procedure -> RemoteProcedure serverModel msg serverMsg)
   -> (input -> ( model, MultitierCmd procedure msg))
   -> (String -> ( model, Cmd msg ))
 unwrapInitWithFlags config proceduresMap init =
@@ -215,7 +215,7 @@ unwrapInitWithFlags config proceduresMap init =
 
 unwrapUpdate :
      Config
-  -> (procedure -> Procedure serverModel msg serverMsg)
+  -> (procedure -> RemoteProcedure serverModel msg serverMsg)
   -> (msg -> model -> ( model, MultitierCmd procedure msg ))
   -> (msg -> model -> ( model, Cmd msg ))
 unwrapUpdate config proceduresMap update =
@@ -224,7 +224,7 @@ unwrapUpdate config proceduresMap update =
     in  (newModel, unbatch config proceduresMap cmds)
 
 
-handle : (serverModel -> input) -> (procedure -> Procedure serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
+handle : (serverModel -> input) -> (procedure -> RemoteProcedure serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
 handle serverState procedures request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
