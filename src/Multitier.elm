@@ -96,7 +96,7 @@ program :
   , subscriptions : model -> Sub msg
   , view : model -> Html msg
   , serverState : serverModel -> serverState
-  , procedures : remoteServerMsg -> RPC serverModel msg serverMsg
+  , serverRPCs : remoteServerMsg -> RPC serverModel msg serverMsg
   , initServer: (serverModel, Cmd serverMsg)
   , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
   , serverSubscriptions : serverModel -> Sub serverMsg
@@ -120,7 +120,7 @@ clientStuff :
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        , serverState : serverModel -> serverState
-       , procedures : remoteServerMsg -> RPC serverModel msg serverMsg
+       , serverRPCs : remoteServerMsg -> RPC serverModel msg serverMsg
        , initServer: (serverModel, Cmd serverMsg)
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
@@ -130,8 +130,8 @@ clientStuff :
        , subscriptions : model -> Sub (ClientMsg msg)
        , view : model -> Html (ClientMsg msg)}
 clientStuff stuff =
-  let init = unwrapInitWithFlags stuff.config stuff.procedures stuff.init
-      update = unwrapUpdate stuff.config stuff.procedures stuff.update
+  let init = unwrapInitWithFlags stuff.config stuff.serverRPCs stuff.init
+      update = unwrapUpdate stuff.config stuff.serverRPCs stuff.update
   in let wrapUpdate msg model =
           case msg of
             ClientUserMsg userMsg -> updateHelp ClientUserMsg <| update userMsg model
@@ -154,7 +154,7 @@ serverStuff :
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        , serverState : serverModel -> serverState
-       , procedures : remoteServerMsg -> RPC serverModel msg serverMsg
+       , serverRPCs : remoteServerMsg -> RPC serverModel msg serverMsg
        , initServer: (serverModel, Cmd serverMsg)
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
@@ -169,7 +169,7 @@ serverStuff stuff =
         wrapUpdate msg model =
           case msg of
             ServerUserMsg userMsg -> updateHelp ServerUserMsg <| update userMsg model
-            Request request -> handle stuff.serverState stuff.procedures request model
+            Request request -> handle stuff.serverState stuff.serverRPCs request model
             Reply request message data -> (model, HttpServer.reply request (encodeResponse (Response data message)))
             ReplyFile request file ->  (model, HttpServer.replyFile request file)
         wrapSubscriptions model =
@@ -181,10 +181,10 @@ serverStuff stuff =
        }
 
 unbatch : Config -> (remoteServerMsg -> RPC serverModel msg serverMsg) -> MultitierCmd remoteServerMsg msg -> Cmd msg
-unbatch config procedures mtcmd =
+unbatch config serverRPCs mtcmd =
   case mtcmd of
     ServerCmd remoteServerMsg ->
-      let (Rpc handler _) = procedures remoteServerMsg in
+      let (Rpc handler _) = serverRPCs remoteServerMsg in
         Http.send (\result -> handler ((Result.mapError (\err -> NetworkError err) result)
                                           |> Result.andThen (\response -> case response.data of
                                               Just data -> Ok data
@@ -193,39 +193,39 @@ unbatch config procedures mtcmd =
                       (Http.jsonBody (toJSON remoteServerMsg)) decodeResponse)
 
     ClientCmd cmd -> cmd
-    Batch cmds    -> Cmd.batch (List.map (unbatch config procedures) cmds)
+    Batch cmds    -> Cmd.batch (List.map (unbatch config serverRPCs) cmds)
 
 unwrapInit :
      Config
   -> (remoteServerMsg -> RPC serverModel msg serverMsg)
   -> ( model, MultitierCmd remoteServerMsg msg)
   -> ( model, Cmd msg )
-unwrapInit config procedures ( model, cmds) = (model, unbatch config procedures cmds)
+unwrapInit config serverRPCs ( model, cmds) = (model, unbatch config serverRPCs cmds)
 
 unwrapInitWithFlags :
      Config
   -> (remoteServerMsg -> RPC serverModel msg serverMsg)
   -> (input -> ( model, MultitierCmd remoteServerMsg msg))
   -> (String -> ( model, Cmd msg ))
-unwrapInitWithFlags config procedures init =
+unwrapInitWithFlags config serverRPCs init =
   \str ->
     let serverState = fromJSONString str in
       let (model, cmds) = init serverState in
-        (model, unbatch config procedures cmds)
+        (model, unbatch config serverRPCs cmds)
 
 unwrapUpdate :
      Config
   -> (remoteServerMsg -> RPC serverModel msg serverMsg)
   -> (msg -> model -> ( model, MultitierCmd remoteServerMsg msg ))
   -> (msg -> model -> ( model, Cmd msg ))
-unwrapUpdate config procedures update =
+unwrapUpdate config serverRPCs update =
   \msg model ->
     let (newModel, cmds) = update msg model
-    in  (newModel, unbatch config procedures cmds)
+    in  (newModel, unbatch config serverRPCs cmds)
 
 
 handle : (serverModel -> serverState) -> (remoteServerMsg -> RPC serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
-handle serverState procedures request model =
+handle serverState serverRPCs request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
   in case request.method of
@@ -239,7 +239,7 @@ handle serverState procedures request model =
         _ -> invalidRequest "File not found."
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
-      ["rpc"] -> let (Rpc _ update) = procedures (fromJSONString request.body) in
+      ["rpc"] -> let (Rpc _ update) = serverRPCs (fromJSONString request.body) in
         let (newModel, task, cmd) = update model in
           (newModel, Cmd.batch [ Cmd.map ServerUserMsg cmd, Task.attempt (\result -> case result of
                                       Err _ ->      Reply request "Procedure failed" Nothing
