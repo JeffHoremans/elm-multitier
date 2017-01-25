@@ -26,34 +26,34 @@ import String
 import Multitier.Server.HttpServer as HttpServer
 import Multitier.Server.HttpServer.Utils exposing (Method(..))
 import Multitier.Error exposing (Error(..))
-import Multitier.RemoteProcedure exposing (..)
+import Multitier.RPC exposing (..)
 import Multitier.Server.File as File
 import Multitier.LowLevel as LowLevel exposing (fromJSON, toJSON, fromJSONString)
 
-type MultitierCmd procedure msg = ServerCmd procedure |
+type MultitierCmd remoteServerMsg msg = ServerCmd remoteServerMsg |
                                   ClientCmd (Cmd msg) |
 
-                                  Batch (List (MultitierCmd procedure msg))
+                                  Batch (List (MultitierCmd remoteServerMsg msg))
 
-performOnServer : procedure -> MultitierCmd procedure msg
-performOnServer proc = ServerCmd proc
+performOnServer : remoteServerMsg -> MultitierCmd remoteServerMsg msg
+performOnServer msg = ServerCmd msg
 
 performOnClient : Cmd msg -> MultitierCmd procedure msg
 performOnClient cmd = ClientCmd cmd
 
-map : (a -> procedure) -> (b -> msg) -> MultitierCmd a b -> MultitierCmd procedure msg
+map : (a -> remoteServerMsg) -> (b -> msg) -> MultitierCmd a b -> MultitierCmd remoteServerMsg msg
 map fa fb mtcmd = case mtcmd of
-  ServerCmd procedure -> ServerCmd (fa procedure)
+  ServerCmd remoteServerMsg -> ServerCmd (fa remoteServerMsg)
   ClientCmd cmd -> ClientCmd (Cmd.map fb cmd)
   Batch cmds    -> Batch (List.map (map fa fb) cmds)
 
-batch : List (MultitierCmd procedure msg) -> MultitierCmd procedure msg
+batch : List (MultitierCmd remoteServerMsg msg) -> MultitierCmd remoteServerMsg msg
 batch = Batch
 
-none : MultitierCmd procedure msg
+none : MultitierCmd remoteServerMsg msg
 none = batch []
 
-(!!) : model -> List (MultitierCmd procedure msg) -> (model, MultitierCmd procedure msg)
+(!!) : model -> List (MultitierCmd remoteServerMsg msg) -> (model, MultitierCmd remoteServerMsg msg)
 (!!) model commands = (model, batch commands)
 
 -- PROGRAM
@@ -91,12 +91,12 @@ type alias MultitierProgram model serverModel msg serverMsg =
 
 program :
   { config: Config
-  , init : serverState -> ( model, MultitierCmd proc msg )
-  , update : msg -> model -> ( model, MultitierCmd proc msg )
+  , init : serverState -> ( model, MultitierCmd remoteServerMsg msg )
+  , update : msg -> model -> ( model, MultitierCmd remoteServerMsg msg )
   , subscriptions : model -> Sub msg
   , view : model -> Html msg
   , serverState : serverModel -> serverState
-  , procedures : proc -> RemoteProcedure serverModel msg serverMsg
+  , procedures : remoteServerMsg -> RPC serverModel msg serverMsg
   , initServer: (serverModel, Cmd serverMsg)
   , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
   , serverSubscriptions : serverModel -> Sub serverMsg
@@ -115,12 +115,12 @@ serverProgram program = program.server
 
 clientStuff :
        { config: Config
-       , init : serverState -> ( model, MultitierCmd proc msg )
-       , update : msg -> model -> ( model, MultitierCmd proc msg )
+       , init : serverState -> ( model, MultitierCmd remoteServerMsg msg )
+       , update : msg -> model -> ( model, MultitierCmd remoteServerMsg msg )
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        , serverState : serverModel -> serverState
-       , procedures : proc -> RemoteProcedure serverModel msg serverMsg
+       , procedures : remoteServerMsg -> RPC serverModel msg serverMsg
        , initServer: (serverModel, Cmd serverMsg)
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
@@ -149,12 +149,12 @@ clientStuff stuff =
 
 serverStuff :
        { config: Config
-       , init : serverState -> ( model, MultitierCmd proc msg )
-       , update : msg -> model -> ( model, MultitierCmd proc msg )
+       , init : serverState -> ( model, MultitierCmd remoteServerMsg msg )
+       , update : msg -> model -> ( model, MultitierCmd remoteServerMsg msg )
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
        , serverState : serverModel -> serverState
-       , procedures : proc -> RemoteProcedure serverModel msg serverMsg
+       , procedures : remoteServerMsg -> RPC serverModel msg serverMsg
        , initServer: (serverModel, Cmd serverMsg)
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
        , serverSubscriptions : serverModel -> Sub serverMsg
@@ -180,51 +180,51 @@ serverStuff stuff =
        , subscriptions = wrapSubscriptions
        }
 
-unbatch : Config -> (procedure -> RemoteProcedure serverModel msg serverMsg) -> MultitierCmd procedure msg -> Cmd msg
-unbatch config proceduresMap mtcmd =
+unbatch : Config -> (remoteServerMsg -> RPC serverModel msg serverMsg) -> MultitierCmd remoteServerMsg msg -> Cmd msg
+unbatch config procedures mtcmd =
   case mtcmd of
-    ServerCmd procedure ->
-      let (Proc handler _) = proceduresMap procedure in
+    ServerCmd remoteServerMsg ->
+      let (Rpc handler _) = procedures remoteServerMsg in
         Http.send (\result -> handler ((Result.mapError (\err -> NetworkError err) result)
                                           |> Result.andThen (\response -> case response.data of
                                               Just data -> Ok data
                                               _ -> Err (ServerError response.message))))
-          (Http.post  ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/procedure" )
-                      (Http.jsonBody (toJSON procedure)) decodeResponse)
+          (Http.post  ("http://" ++ config.hostname ++ ":" ++ (toString config.httpPort) ++ "/rpc" )
+                      (Http.jsonBody (toJSON remoteServerMsg)) decodeResponse)
 
     ClientCmd cmd -> cmd
-    Batch cmds    -> Cmd.batch (List.map (unbatch config proceduresMap) cmds)
+    Batch cmds    -> Cmd.batch (List.map (unbatch config procedures) cmds)
 
 unwrapInit :
      Config
-  -> (procedure -> RemoteProcedure serverModel msg serverMsg)
-  -> ( model, MultitierCmd procedure msg)
+  -> (remoteServerMsg -> RPC serverModel msg serverMsg)
+  -> ( model, MultitierCmd remoteServerMsg msg)
   -> ( model, Cmd msg )
-unwrapInit config proceduresMap ( model, cmds) = (model, unbatch config proceduresMap cmds)
+unwrapInit config procedures ( model, cmds) = (model, unbatch config procedures cmds)
 
 unwrapInitWithFlags :
      Config
-  -> (procedure -> RemoteProcedure serverModel msg serverMsg)
-  -> (input -> ( model, MultitierCmd procedure msg))
+  -> (remoteServerMsg -> RPC serverModel msg serverMsg)
+  -> (input -> ( model, MultitierCmd remoteServerMsg msg))
   -> (String -> ( model, Cmd msg ))
-unwrapInitWithFlags config proceduresMap init =
+unwrapInitWithFlags config procedures init =
   \str ->
     let serverState = fromJSONString str in
       let (model, cmds) = init serverState in
-        (model, unbatch config proceduresMap cmds)
+        (model, unbatch config procedures cmds)
 
 unwrapUpdate :
      Config
-  -> (procedure -> RemoteProcedure serverModel msg serverMsg)
-  -> (msg -> model -> ( model, MultitierCmd procedure msg ))
+  -> (remoteServerMsg -> RPC serverModel msg serverMsg)
+  -> (msg -> model -> ( model, MultitierCmd remoteServerMsg msg ))
   -> (msg -> model -> ( model, Cmd msg ))
-unwrapUpdate config proceduresMap update =
+unwrapUpdate config procedures update =
   \msg model ->
     let (newModel, cmds) = update msg model
-    in  (newModel, unbatch config proceduresMap cmds)
+    in  (newModel, unbatch config procedures cmds)
 
 
-handle : (serverModel -> input) -> (procedure -> RemoteProcedure serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
+handle : (serverModel -> serverState) -> (remoteServerMsg -> RPC serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
 handle serverState procedures request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
@@ -239,7 +239,7 @@ handle serverState procedures request model =
         _ -> invalidRequest "File not found."
       _ -> invalidRequest "Invalid request"
     POST -> case pathList of
-      ["procedure"] -> let (Proc _ update) = procedures (fromJSONString request.body) in
+      ["rpc"] -> let (Rpc _ update) = procedures (fromJSONString request.body) in
         let (newModel, task, cmd) = update model in
           (newModel, Cmd.batch [ Cmd.map ServerUserMsg cmd, Task.attempt (\result -> case result of
                                       Err _ ->      Reply request "Procedure failed" Nothing
