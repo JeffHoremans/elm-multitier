@@ -52,20 +52,20 @@ cmdMap _ cmd = case cmd of
 -- SUBSCRIPTIONS
 
 
-type MySub msg = Listen Int (Request -> msg) | ListenSocket (SocketServer -> msg) ((Int, String) -> msg)
+type MySub msg = Listen Int (Request -> msg) | ListenSocket (SocketServer -> msg) (ClientId -> msg)  (ClientId -> msg) ((ClientId, String) -> msg)
 
 listen : Int -> (Request -> msg) -> Sub msg
 listen portNumber tagger =
   subscription (Listen portNumber tagger)
 
-listenToSocket : (SocketServer -> msg) -> ((Int,String) -> msg) -> Sub msg
-listenToSocket tagger handler =
-  subscription (ListenSocket tagger handler)
+listenToSocket : (SocketServer -> msg) -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId,String) -> msg) -> Sub msg
+listenToSocket onSocketOpen onConnect onDisconnect onMessage =
+  subscription (ListenSocket onSocketOpen onConnect onDisconnect onMessage)
 
 subMap : (a -> b) -> MySub a -> MySub b
 subMap func sub = case sub of
   Listen portNumber tagger -> Listen portNumber (tagger >> func)
-  ListenSocket tagger handler -> ListenSocket (tagger >> func) (handler >> func)
+  ListenSocket onSocketOpen onConnect onDisconnect onMessage -> ListenSocket (onSocketOpen >> func) (onConnect >> func) (onDisconnect >> func) (onMessage >> func)
 
 
 -- MANAGER
@@ -74,7 +74,7 @@ type alias State msg =
   { server: Maybe Http.Server
   , socketServer: Maybe SocketServer
   , httpSub : Maybe (Int, (Request -> msg))
-  , socketSubs : List ((SocketServer -> msg), ((Int,String) -> msg))
+  , socketSubs : List ((SocketServer -> msg), (ClientId -> msg), (ClientId -> msg), ((ClientId,String) -> msg))
   }
 
 init : Task Never (State msg)
@@ -96,7 +96,7 @@ makeSubs router subList state = case subList of
   Listen portNumber tagger :: subs -> case state.httpSub of
     Nothing -> makeSubs router subs { state | httpSub = Just (portNumber, tagger) }
     _ -> makeSubs router subs state
-  ListenSocket tagger handler :: subs -> makeSubs router subs { state | socketSubs = (tagger,handler) :: state.socketSubs }
+  ListenSocket onSocketOpen onConnect onDisconnect onMessage :: subs -> makeSubs router subs { state | socketSubs = (onSocketOpen,onConnect,onDisconnect,onMessage) :: state.socketSubs }
   [] -> Task.succeed state
 
 startHttpServerIfNeeded : Platform.Router msg Msg -> State msg -> Task Never (State msg)
@@ -119,7 +119,9 @@ handleCommands router cmdList state = case cmdList of
 
 
 type Msg = StartServer Int |
-           OnStart Http.Server | OnRequest Request | OnMessage Int String | OnClose Int
+           OnStart Http.Server | OnClose Int |
+           OnRequest Request |
+           OnMessage ClientId String | OnConnect ClientId | OnDisconnect ClientId
 
 
 onSelfMsg : Platform.Router msg Msg -> Msg -> State msg -> Task Never (State msg)
@@ -132,10 +134,24 @@ onSelfMsg router selfMsg state =
     OnClose portNumber ->
       Task.succeed state
 
+    OnConnect clientId ->
+      case state.socketServer of
+        Just socketServer ->
+          let messages = List.map (\(_,onConnect,_,_) -> Platform.sendToApp router (onConnect clientId)) state.socketSubs
+          in Task.sequence messages
+            |> Task.andThen (\_ -> Task.succeed state)
+        _ -> Task.succeed state
+    OnDisconnect clientId ->
+      case state.socketServer of
+        Just socketServer ->
+          let messages = List.map (\(_,_,onDisconnect,_) -> Platform.sendToApp router (onDisconnect clientId)) state.socketSubs
+          in Task.sequence messages
+            |> Task.andThen (\_ -> Task.succeed state)
+        _ -> Task.succeed state
     OnMessage clientId message ->
       case state.socketServer of
         Just socketServer ->
-          let messages = List.map (\(tagger, handler) -> Platform.sendToApp router (handler (clientId,message))) state.socketSubs
+          let messages = List.map (\(_,_,_,onMessage) -> Platform.sendToApp router (onMessage (clientId,message))) state.socketSubs
           in Task.sequence messages
             |> Task.andThen (\_ -> Task.succeed state)
         _ -> Task.succeed state
@@ -149,7 +165,7 @@ openSocketIfNeeded : Platform.Router msg Msg -> State msg -> Http.Server -> Task
 openSocketIfNeeded router state server =
   case state.socketSubs of
     tagger :: _ -> Http.openSocket server { onMessage = \message -> Platform.sendToSelf router (OnMessage message.clientId message.data) }
-      |> andThen (\socketServer -> Task.sequence (List.map (\(tagger, handler) -> Platform.sendToApp router (tagger socketServer)) state.socketSubs)
+      |> andThen (\socketServer -> Task.sequence (List.map (\(onSocketOpen,_,_,_) -> Platform.sendToApp router (onSocketOpen socketServer)) state.socketSubs)
         |> andThen (\_ -> Task.succeed { state | socketServer = Just socketServer}))
     _ -> Task.succeed state
 

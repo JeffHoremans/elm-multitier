@@ -34,7 +34,9 @@ type alias Message = { clientId: ClientId
                      , data: String}
 
 type alias WebSocketEventHandlers =
-  { onMessage : Message -> Task Never () }
+  { onConnect : ClientId -> Task Never ()
+  , onDisconnect : ClientId -> Task Never ()
+  , onMessage : Message -> Task Never () }
 
 type alias EventHandlers =
   { onRequest : Request -> Task Never ()

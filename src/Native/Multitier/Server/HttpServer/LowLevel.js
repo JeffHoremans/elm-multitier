@@ -87,6 +87,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
               var id = connection_id++;
               active_connections[id] = connection;
               connection.id = id
+              Scheduler.rawSpawn(handlers.onConnect(id));
 
               connection.on('message', function(message){
                 if(message.type === 'utf8'){
@@ -100,6 +101,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
 
               connection.on('close', function(reasonCode, description) {
                   console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
+                  Scheduler.rawSpawn(handlers.onDisconnect(connection.id));
                   delete active_connections[connection.id]
               });
           });

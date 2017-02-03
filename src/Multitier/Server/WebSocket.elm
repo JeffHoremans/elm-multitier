@@ -13,8 +13,8 @@ import Multitier.Server.HttpServer as HttpServer
 type alias SocketServer = HttpServer.SocketServer
 type alias ClientId = HttpServer.ClientId
 
-listen : (SocketServer -> msg) -> ((Int, String) -> msg) -> Sub msg
-listen tagger handler= HttpServer.listenToSocket tagger handler
+listen : (SocketServer -> msg) -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
+listen onSocketOpen onConnect onDisconnect onMessage = HttpServer.listenToSocket onSocketOpen onConnect onDisconnect onMessage
 
 broadcast : SocketServer -> String -> Cmd msg
 broadcast server message = HttpServer.broadcast server message
