@@ -52,13 +52,13 @@ cmdMap _ cmd = case cmd of
 -- SUBSCRIPTIONS
 
 
-type MySub msg = Listen Int (Request -> msg) | ListenSocket (SocketServer -> msg) (ClientId -> msg)  (ClientId -> msg) ((ClientId, Value) -> msg)
+type MySub msg = Listen Int (Request -> msg) | ListenSocket (SocketServer -> msg) (ClientId -> msg)  (ClientId -> msg) ((ClientId, String) -> msg)
 
 listen : Int -> (Request -> msg) -> Sub msg
 listen portNumber tagger =
   subscription (Listen portNumber tagger)
 
-listenToSocket : (SocketServer -> msg) -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId,Value) -> msg) -> Sub msg
+listenToSocket : (SocketServer -> msg) -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId,String) -> msg) -> Sub msg
 listenToSocket onSocketOpen onConnect onDisconnect onMessage =
   subscription (ListenSocket onSocketOpen onConnect onDisconnect onMessage)
 
@@ -74,7 +74,7 @@ type alias State msg =
   { server: Maybe Http.Server
   , socketServer: Maybe SocketServer
   , httpSub : Maybe (Int, (Request -> msg))
-  , socketSubs : List ((SocketServer -> msg), (ClientId -> msg), (ClientId -> msg), ((ClientId,Value) -> msg))
+  , socketSubs : List ((SocketServer -> msg), (ClientId -> msg), (ClientId -> msg), ((ClientId,String) -> msg))
   }
 
 init : Task Never (State msg)
@@ -121,7 +121,7 @@ handleCommands router cmdList state = case cmdList of
 type Msg = StartServer Int |
            OnStart Http.Server | OnClose Int |
            OnRequest Request |
-           OnMessage ClientId Value | OnConnect ClientId | OnDisconnect ClientId
+           OnMessage ClientId String | OnConnect ClientId | OnDisconnect ClientId
 
 
 onSelfMsg : Platform.Router msg Msg -> Msg -> State msg -> Task Never (State msg)

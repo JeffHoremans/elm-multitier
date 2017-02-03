@@ -31,7 +31,7 @@ type RawRequest = RawRequest
 
 type alias ClientId = Int
 type alias Message = { clientId: ClientId
-                     , data: Value}
+                     , data: String}
 
 type alias WebSocketEventHandlers =
   { onConnect : ClientId -> Task Never ()
