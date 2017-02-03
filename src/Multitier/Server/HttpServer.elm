@@ -164,9 +164,12 @@ onSelfMsg router selfMsg state =
 openSocketIfNeeded : Platform.Router msg Msg -> State msg -> Http.Server -> Task Never (State msg)
 openSocketIfNeeded router state server =
   case state.socketSubs of
-    tagger :: _ -> Http.openSocket server { onMessage = \message -> Platform.sendToSelf router (OnMessage message.clientId message.data) }
-      |> andThen (\socketServer -> Task.sequence (List.map (\(onSocketOpen,_,_,_) -> Platform.sendToApp router (onSocketOpen socketServer)) state.socketSubs)
-        |> andThen (\_ -> Task.succeed { state | socketServer = Just socketServer}))
+    tagger :: _ ->
+      Http.openSocket server { onMessage = \message -> Platform.sendToSelf router (OnMessage message.clientId message.data)
+                             , onConnect = \cid -> Platform.sendToSelf router (OnConnect cid)
+                             , onDisconnect = \cid -> Platform.sendToSelf router (OnDisconnect cid)}
+        |> andThen (\socketServer -> Task.sequence (List.map (\(onSocketOpen,_,_,_) -> Platform.sendToApp router (onSocketOpen socketServer)) state.socketSubs)
+          |> andThen (\_ -> Task.succeed { state | socketServer = Just socketServer}))
     _ -> Task.succeed state
 
 -- START SERVER
