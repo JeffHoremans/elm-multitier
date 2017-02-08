@@ -9,12 +9,15 @@ module Multitier.Server.WebSocket
         )
 
 import Multitier.Server.HttpServer as HttpServer
+import String
 
 type alias WebSocket = HttpServer.Socket
 type alias ClientId = HttpServer.ClientId
 
 listen : String -> (WebSocket -> msg) -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
-listen path onSocketOpen onConnect onDisconnect onMessage = HttpServer.listenToSocket path onSocketOpen onConnect onDisconnect onMessage
+listen path onSocketOpen onConnect onDisconnect onMessage =
+  let safePath = if String.startsWith "/" path then path else ("/" ++ path)
+    in HttpServer.listenToSocket path onSocketOpen onConnect onDisconnect onMessage
 
 broadcast : WebSocket -> String -> Cmd msg
 broadcast server message = HttpServer.broadcast server message
