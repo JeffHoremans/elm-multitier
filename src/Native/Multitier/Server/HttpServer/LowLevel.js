@@ -122,6 +122,8 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
+          console.log("after mount");
+          console.log(router);
           callback(Scheduler.succeed({ ctor:"Socket", _0:path }))
         });
       }
