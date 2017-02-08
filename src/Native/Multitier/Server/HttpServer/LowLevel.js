@@ -92,6 +92,9 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
 
           router.mount(path, null, function(request) {
 
+            console.log("request");
+            console.log(request);
+
             if (!originIsAllowed(request.origin)) {
               // Make sure we only accept requests from an allowed origin
               request.reject();
@@ -122,8 +125,6 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
-          console.log("after mount");
-          console.log(router);
           callback(Scheduler.succeed({ ctor:"Socket", _0:path }))
         });
       }
