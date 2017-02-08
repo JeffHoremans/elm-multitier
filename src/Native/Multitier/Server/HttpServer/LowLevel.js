@@ -92,9 +92,6 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
 
           router.mount(path, null, function(request) {
 
-            console.log("request");
-            console.log(request);
-
             if (!originIsAllowed(request.origin)) {
               // Make sure we only accept requests from an allowed origin
               request.reject();
@@ -102,7 +99,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
               return;
             }
 
-            var connection = request.accept(null, request.origin);
+            var connection = request.accept(request.origin);
             var id = connection_ids[path]++;
             active_connections[path][id] = connection;
             connection.id = id
@@ -125,6 +122,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
+          console.log(router);
           callback(Scheduler.succeed({ ctor:"Socket", _0:path }))
         });
       }
