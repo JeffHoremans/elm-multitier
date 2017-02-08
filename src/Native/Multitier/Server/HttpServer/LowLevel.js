@@ -160,7 +160,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
               } else {
                 callback(Scheduler.fail("Client with the given id is not connected (anymore)..."));
               }
-            else {
+            } else {
               callback(Scheduler.fail("The given socket is closed..."));
             }
           } else {
