@@ -8,7 +8,7 @@ import Json.Encode as Encode exposing (Value)
 import Task exposing (Task)
 
 import Multitier.Error exposing (Error(..))
-import Multitier.Internal.LowLevel exposing (toJSON, fromJSON)
+import Internal.LowLevel exposing (toJSON, fromJSON)
 
 type RPC serverModel msg serverMsg = Rpc (Handler msg) (serverModel -> (serverModel, Task Error Value, Cmd serverMsg))
 
