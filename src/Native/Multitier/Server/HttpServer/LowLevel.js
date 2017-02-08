@@ -255,22 +255,3 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
   }
 
 }();
-
-(function() {
-
-    var isNode = typeof global !== "undefined" && ({}).toString.call(global) === '[object global]';
-
-    if (isNode) {
-      setTimeout(function() {
-          if (!module.parent) {
-              if ('ServerStarter' in module.exports) {
-                  module.exports.ServerStarter.worker();
-              } else {
-                  throw new Error('TODO: error message.');
-              }
-          }
-      });
-    } else {
-      return;
-    }
-})();
