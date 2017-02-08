@@ -3,12 +3,6 @@ elm-stuff/
 # elm-repl generated files
 repl-temp-*
 
-# generated files
-examples/*.js
-examples/*.html
-examples/demo/*.js
-examples/demo/*.html
-
 #Node
 # Logs
 logs
