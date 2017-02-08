@@ -86,8 +86,8 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             return true;
           }
 
-          var connection_ids[path] = 0;
-          var active_connections[path] = {};
+          connection_ids[path] = 0;
+          active_connections[path] = {};
 
           router.mount(path, null, function(request) {
 
