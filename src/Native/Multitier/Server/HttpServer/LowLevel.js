@@ -89,6 +89,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
 
           connection_ids[path] = 0;
           active_connections[path] = {};
+          mounted[path] = true;
 
           router.mount(path, null, function(request) {
 
@@ -122,7 +123,6 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
-          mounted[path] = true;
           callback(Scheduler.succeed({ ctor:"Socket", _0:path }))
         });
       }
