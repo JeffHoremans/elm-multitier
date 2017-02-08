@@ -140,7 +140,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
       var broadcast = function(socket, message) {
         return Scheduler.nativeBinding(function(callback) {
           var path = socket._0;
-          if(mounted[path]){
+          if(mounted[path] === true){
             for (var id in active_connections[path]){
               active_connections[path][id].sendUTF(message);
             }
@@ -153,7 +153,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         return Scheduler.nativeBinding(function(callback) {
           var path = socket._0;
           if (path === cid._0){
-            if(mounted[path]){
+            if(mounted[path] === true){
               if(active_connections[path][cid._1]){
                 active_connections[path][cid._1].sendUTF(message)
                 callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
