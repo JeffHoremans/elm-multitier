@@ -14,6 +14,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
 
       var connection_ids = {}
       var active_connections = {}
+      var mounted = {}
 
       var listen = function (port, handlers) {
         return Scheduler.nativeBinding(function (callback) {
@@ -121,6 +122,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
+          mounted[path] = true;
           callback(Scheduler.succeed({ ctor:"Socket", _0:path }))
         });
       }
@@ -129,6 +131,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         return Scheduler.nativeBinding(function(callback){
           var path = socket._0;
           router.unmount(path, '____no_protocol____');
+          mounted[path] = false;
           console.log("Closed socket with path " + path + " unmounted!");
           callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         });
@@ -137,8 +140,10 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
       var broadcast = function(socket, message) {
         return Scheduler.nativeBinding(function(callback) {
           var path = socket._0;
-          for (var id in active_connections[path]){
-            active_connections[path][id].sendUTF(message)
+          if(mounted[path]){
+            for (var id in active_connections[path]){
+              active_connections[path][id].sendUTF(message);
+            }
           }
           callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         })
@@ -148,11 +153,15 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         return Scheduler.nativeBinding(function(callback) {
           var path = socket._0;
           if (path === cid._0){
-            if(active_connections[path][cid._1]){
-              active_connections[path][cid._1].sendUTF(message)
-              callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
-            } else {
-              callback(Scheduler.fail("Client with the given id is not connected (anymore)..."));
+            if(mounted[path]){
+              if(active_connections[path][cid._1]){
+                active_connections[path][cid._1].sendUTF(message)
+                callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+              } else {
+                callback(Scheduler.fail("Client with the given id is not connected (anymore)..."));
+              }
+            else {
+              callback(Scheduler.fail("The given socket is closed..."));
             }
           } else {
             callback(Scheduler.fail("The given client id does not belong to the given socket..."))
