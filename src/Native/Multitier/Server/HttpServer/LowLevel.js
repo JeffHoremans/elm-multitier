@@ -129,6 +129,9 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         return Scheduler.nativeBinding(function(callback){
           var path = socket._0;
           router.unmount(path, '____no_protocol____');
+          connection_ids[path] = 0;
+          active_connections[path] = {};
+          console.log("socket with path " + path + " unmounted!");
           callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         });
       }
