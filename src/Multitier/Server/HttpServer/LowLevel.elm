@@ -1,15 +1,18 @@
 module Multitier.Server.HttpServer.LowLevel exposing
   ( listen
-  , openSocket
   , EventHandlers
   , reply
   , replyFile
+  , createSocketRouter
+  , openSocket
+  , closeSocket
   , broadcast
   , send
   , Server
-  , SocketServer
+  , SocketRouter
+  , Socket(..)
   , Request
-  , ClientId
+  , ClientId(..)
   )
 
 
@@ -21,15 +24,18 @@ import Multitier.Server.HttpServer.Utils exposing (Method)
 
 
 type Server = Server
-type SocketServer = SocketServer
+type SocketRouter = SocketRouter
+type Socket = Socket String
 
 type alias Request = { method: Method
                      , path: String
                      , body: String
                      , rawRequest: RawRequest }
+
 type RawRequest = RawRequest
 
-type alias ClientId = Int
+type ClientId = ClientId String Int
+
 type alias Message = { clientId: ClientId
                      , data: String}
 
@@ -46,17 +52,23 @@ type alias EventHandlers =
 listen : Int -> EventHandlers -> Task x Server
 listen portNumber handlers = Native.Multitier.Server.HttpServer.LowLevel.listen portNumber handlers
 
-openSocket : Server -> WebSocketEventHandlers -> Task x SocketServer
-openSocket handlers = Native.Multitier.Server.HttpServer.LowLevel.openSocket handlers
-
 reply : Request -> Value -> Task x ()
 reply request value = Native.Multitier.Server.HttpServer.LowLevel.reply request (Encode.encode 4 value)
 
 replyFile : Request -> String -> Task x ()
 replyFile request filename = Native.Multitier.Server.HttpServer.LowLevel.replyFile request filename
 
-broadcast : SocketServer -> String -> Task x ()
-broadcast server message = Native.Multitier.Server.HttpServer.LowLevel.broadcast server message
+createSocketRouter : Server -> Task x SocketRouter
+createSocketRouter server = Native.Multitier.Server.HttpServer.LowLevel.createSocketRouter server
 
-send : SocketServer -> ClientId -> String -> Task x ()
-send server cid message = Native.Multitier.Server.HttpServer.LowLevel.send server cid message
+openSocket : SocketRouter -> String -> WebSocketEventHandlers -> Task x Socket
+openSocket router path handlers = Native.Multitier.Server.HttpServer.LowLevel.openSocket router path handlers
+
+closeSocket : SocketRouter -> Socket -> Task x ()
+closeSocket router socket = Native.Multitier.Server.HttpServer.LowLevel.closeSocket router socket
+
+broadcast : Socket -> String -> Task x ()
+broadcast socket message = Native.Multitier.Server.HttpServer.LowLevel.broadcast socket message
+
+send : Socket -> ClientId -> String -> Task x ()
+send socket cid message = Native.Multitier.Server.HttpServer.LowLevel.send socket cid message

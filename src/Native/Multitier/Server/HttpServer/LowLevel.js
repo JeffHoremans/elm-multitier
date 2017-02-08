@@ -10,7 +10,9 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
       var url = require('url');
       var fs = require('fs');
       var WebSocketServer = require('websocket').server;
-      var connection_id = 0
+      var WebSocketRouter = require('websocket').router;
+
+      var connection_ids = {}
       var active_connections = {}
 
       var listen = function (port, handlers) {
@@ -57,9 +59,8 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         });
       }
 
-      var openSocket = function(server, handlers){
+      var createSocketRouter(server){
         return Scheduler.nativeBinding(function(callback) {
-          console.log("WebSocket Server started...")
           var wsServer = new WebSocketServer({
               httpServer: server,
               // You should not use autoAcceptConnections for production
@@ -70,63 +71,90 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
               autoAcceptConnections: false
           });
 
+          var router = new WebSocketRouter();
+          router.attachServer(wsServer);
+          callback(_elm_lang$core$Native_Scheduler.succeed(router))
+        });
+      }
+
+      var openSocket = function(router, path, handlers){
+        return Scheduler.nativeBinding(function(callback){
+
           var originIsAllowed = function(origin) {
             // put logic here to detect whether the specified origin is allowed.
+            // Could include this in the handlers in the future
             return true;
           }
 
-          wsServer.on('request', function(request) {
-              if (!originIsAllowed(request.origin)) {
-                // Make sure we only accept requests from an allowed origin
-                request.reject();
-                console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
-                return;
+          var connection_ids[path] = 0;
+          var active_connections[path] = {};
+
+          router.mount(path, null, function(request) {
+
+            if (!originIsAllowed(request.origin)) {
+              // Make sure we only accept requests from an allowed origin
+              request.reject();
+              console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
+              return;
+            }
+
+            var connection = request.accept(null, request.origin);
+            var id = connection_ids[path]++;
+            active_connections[path][id] = connection;
+            connection.id = id
+            Scheduler.rawSpawn(handlers.onConnect({ ctor: "ClientId", _0:path, _1: id}));
+
+            connection.on('message', function(message){
+              if(message.type === 'utf8'){
+                Scheduler.rawSpawn(handlers.onMessage({clientId: { ctor: "ClientId", _0:path, _1: id}, data: message.utf8Data}));
+              }
+              else if(message.type === 'binary'){
+                request.reject()
               }
 
-              var connection = request.accept(null, request.origin);
-              var id = connection_id++;
-              active_connections[id] = connection;
-              connection.id = id
-              Scheduler.rawSpawn(handlers.onConnect(id));
+            })
 
-              connection.on('message', function(message){
-                if(message.type === 'utf8'){
-                  Scheduler.rawSpawn(handlers.onMessage({clientId: id, data: message.utf8Data}));
-                }
-                else if(message.type === 'binary'){
-                  request.reject()
-                }
+            connection.on('close', function(reasonCode, description) {
+                console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
+                Scheduler.rawSpawn(handlers.onDisconnect({ ctor: "ClientId", _0:path, _1: id}));
+                delete active_connections[path][id]
+            });
 
-              })
-
-              connection.on('close', function(reasonCode, description) {
-                  console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
-                  Scheduler.rawSpawn(handlers.onDisconnect(connection.id));
-                  delete active_connections[connection.id]
-              });
           });
-
-          callback(_elm_lang$core$Native_Scheduler.succeed({ ctor:"SocketServer" }))
-
-        })
+          callback(Scheduler.succeed({ ctor:"Socket", _0:path }))
+        });
       }
 
-      var broadcast = function(server, message) {
+      var closeSocket = function(router, socket){
+        return Scheduler.nativeBinding(function(callback){
+          var path = socket._0;
+          router.unmount(path, null);
+          callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+        });
+      }
+
+      var broadcast = function(socket, message) {
         return Scheduler.nativeBinding(function(callback) {
-          for (var id in active_connections){
-            active_connections[id].sendUTF(message)
+          var path = socket._0;
+          for (var id in active_connections[path]){
+            active_connections[path][id].sendUTF(message)
           }
-          callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+          callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         })
       }
 
-      var send = function(server, cid, message) {
+      var send = function(socket, cid, message) {
         return Scheduler.nativeBinding(function(callback) {
-          if(active_connections[cid]){
-            active_connections[cid].sendUTF(message)
-            callback(_elm_lang$core$Native_Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+          var path = socket._0;
+          if (path === cid._0){
+            if(active_connections[path][cid._1]){
+              active_connections[path][cid._1].sendUTF(message)
+              callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
+            } else {
+              callback(Scheduler.fail("Client with the given id is not connected (anymore)..."));
+            }
           } else {
-            callback(_elm_lang$core$Native_Scheduler.fail("Client with the given id is not connected (anymore)..."));
+            callback(Scheduler.fail("The given client id does not belong to the given socket..."))
           }
         })
       }
@@ -155,7 +183,9 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         listen: F2(listen),
         reply: F2(reply),
         replyFile: F2(replyFile),
-        openSocket: F2(openSocket),
+        createSocketRouter: createSocketRouter,
+        openSocket: F3(openSocket),
+        closeSocket: F2(closeSocket),
         broadcast: F2(broadcast),
         send: F3(send)
       };
@@ -173,7 +203,15 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         throwError()
       }
 
-      var openSocket = function(server, handlers) {
+      var createSocketRouter = function(server) {
+        throwError()
+      }
+
+      var openSocket = function(router, path, handlers) {
+        throwError()
+      }
+
+      var closeSocket = function(router, socket) {
         throwError()
       }
 
@@ -197,7 +235,9 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         listen: F2(listen),
         reply: F2(reply),
         replyFile: F2(replyFile),
-        openSocket: F2(openSocket),
+        createSocketRouter: createSocketRouter,
+        openSocket: F3(openSocket),
+        closeSocket: F2(closeSocket),
         broadcast: F2(broadcast),
         send: F3(send)
       };
