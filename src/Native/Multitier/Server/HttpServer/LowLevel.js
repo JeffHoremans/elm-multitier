@@ -73,14 +73,13 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
 
           var router = new WebSocketRouter();
           router.attachServer(wsServer);
-          console.log("router created!");
           callback(_elm_lang$core$Native_Scheduler.succeed(router))
         });
       }
 
       var openSocket = function(router, path, handlers){
         return Scheduler.nativeBinding(function(callback){
-          console.log("opening socket with path: " + path);
+          console.log("Opening socket with path: " + path);
           var originIsAllowed = function(origin) {
             // put logic here to detect whether the specified origin is allowed.
             // Could include this in the handlers in the future
@@ -122,7 +121,6 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
-          console.log(router);
           callback(Scheduler.succeed({ ctor:"Socket", _0:path }))
         });
       }
