@@ -5,7 +5,7 @@
     "license": "BSD3",
     "source-directories": [
         "src",
-        "elm-multitier-internal/src"
+        "elm-multitier-lowlevel/src"
     ],
     "exposed-modules": [],
     "native-modules": true,
