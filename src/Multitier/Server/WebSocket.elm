@@ -17,7 +17,7 @@ type alias ClientId = HttpServer.ClientId
 listen : String -> (WebSocket -> msg) -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
 listen path onSocketOpen onConnect onDisconnect onMessage =
   let safePath = if String.startsWith "/" path then path else ("/" ++ path)
-    in HttpServer.listenToSocket path onSocketOpen onConnect onDisconnect onMessage
+    in HttpServer.listenToSocket safePath onSocketOpen onConnect onDisconnect onMessage
 
 broadcast : WebSocket -> String -> Cmd msg
 broadcast server message = HttpServer.broadcast server message
