@@ -59,7 +59,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         });
       }
 
-      var createSocketRouter(server){
+      var createSocketRouter = function(server){
         return Scheduler.nativeBinding(function(callback) {
           var wsServer = new WebSocketServer({
               httpServer: server,
