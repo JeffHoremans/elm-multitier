@@ -132,7 +132,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
           var path = socket._0;
           router.unmount(path, '____no_protocol____');
           mounted[path] = false;
-          console.log("Closed socket with path " + path + " unmounted!");
+          console.log("Closed socket with path " + path );
           callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing));
         });
       }
