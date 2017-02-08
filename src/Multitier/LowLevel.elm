@@ -1,13 +1,13 @@
-module Internal.LowLevel exposing (..)
+module Multitier.LowLevel exposing (..)
 
-import Native.Internal.LowLevel
+import Native.Multitier.LowLevel
 import Json.Encode as Json exposing (Value)
 
 toJSON : a -> Value
-toJSON = Native.Internal.LowLevel.toJSON
+toJSON = Native.Multitier.LowLevel.toJSON
 
 fromJSON : Value -> a
-fromJSON = Native.Internal.LowLevel.fromJSON
+fromJSON = Native.Multitier.LowLevel.fromJSON
 
 fromJSONString : String -> a
-fromJSONString = Native.Internal.LowLevel.fromJSONString
+fromJSONString = Native.Multitier.LowLevel.fromJSONString

@@ -28,7 +28,7 @@ import Multitier.Server.HttpServer.Utils exposing (Method(..))
 import Multitier.Error exposing (Error(..))
 import Multitier.RPC exposing (..)
 import Multitier.Server.File as File
-import Internal.LowLevel as LowLevel exposing (fromJSON, toJSON, fromJSONString)
+import Multitier.LowLevel as LowLevel exposing (fromJSON, toJSON, fromJSONString)
 
 type MultitierCmd remoteServerMsg msg = ServerCmd remoteServerMsg |
                                   ClientCmd (Cmd msg) |
