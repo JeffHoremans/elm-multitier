@@ -2,17 +2,28 @@ module Multitier.Server.WebSocket
     exposing
         ( WebSocket
         , ClientId
+        , encodecid
+        , decodecid
         , listen
         , broadcast
         , multicast
         , send
         )
 
-import Multitier.Server.HttpServer as HttpServer
 import String
+import Json.Encode as Encode exposing (Value)
+import Json.Decode as Decode exposing (Decoder)
+
+import Multitier.Server.HttpServer as HttpServer
 
 type alias WebSocket = HttpServer.Socket
 type alias ClientId = HttpServer.ClientId
+
+encodecid : ClientId -> Value
+encodecid = HttpServer.encodecid
+
+decodecid : Decoder ClientId
+decodecid = HttpServer.decodecid
 
 listen : String -> (WebSocket -> msg) -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
 listen path onSocketOpen onConnect onDisconnect onMessage =

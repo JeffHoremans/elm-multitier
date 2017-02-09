@@ -8,10 +8,13 @@ effect module Multitier.Server.HttpServer where { command = MyCmd, subscription 
   , Request
   , Socket
   , ClientId
+  , encodecid
+  , decodecid
   )
 
 import Task exposing (Task, andThen)
 import Json.Encode as Encode exposing (Value)
+import Json.Decode as Decode exposing (Decoder)
 import Process
 import Dict exposing (Dict)
 
@@ -23,6 +26,11 @@ type alias SocketRouter = Http.SocketRouter
 type alias Socket = Http.Socket
 type alias ClientId = Http.ClientId
 
+encodecid : ClientId -> Value
+encodecid = Http.encodecid
+
+decodecid : Decoder ClientId
+decodecid = Http.decodecid
 
 -- COMMANDS
 

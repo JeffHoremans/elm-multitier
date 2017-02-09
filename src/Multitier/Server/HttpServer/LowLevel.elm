@@ -13,11 +13,14 @@ module Multitier.Server.HttpServer.LowLevel exposing
   , Socket(..)
   , Request
   , ClientId(..)
+  , encodecid
+  , decodecid
   )
 
 
 import Task exposing (Task)
-import Json.Encode as Encode exposing (Value)
+import Json.Encode as Encode exposing (Value, object)
+import Json.Decode as Decode exposing (Decoder, map2, field)
 
 import Native.Multitier.Server.HttpServer.LowLevel
 import Multitier.Server.HttpServer.Utils exposing (Method)
@@ -35,6 +38,16 @@ type alias Request = { method: Method
 type RawRequest = RawRequest
 
 type ClientId = ClientId String Int
+
+encodecid : ClientId -> Value
+encodecid (ClientId path id) = object
+  [ ("path", Encode.string path)
+  , ("id", Encode.int id)]
+
+decodecid : Decoder ClientId
+decodecid = map2 ClientId
+  (field "path" Decode.string)
+  (field "id" Decode.int)
 
 type alias Message = { clientId: ClientId
                      , data: String}
