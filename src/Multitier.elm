@@ -95,7 +95,7 @@ program :
   , update : msg -> model -> ( model, MultitierCmd remoteServerMsg msg )
   , subscriptions : model -> Sub msg
   , view : model -> Html msg
-  , serverState : serverModel -> serverState
+  , serverState : serverModel -> (serverState, serverModel, Cmd serverMsg)
   , serverRPCs : remoteServerMsg -> RPC serverModel msg serverMsg
   , initServer: (serverModel, Cmd serverMsg)
   , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
@@ -119,7 +119,7 @@ clientStuff :
        , update : msg -> model -> ( model, MultitierCmd remoteServerMsg msg )
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
-       , serverState : serverModel -> serverState
+       , serverState : serverModel -> (serverState, serverModel, Cmd serverMsg)
        , serverRPCs : remoteServerMsg -> RPC serverModel msg serverMsg
        , initServer: (serverModel, Cmd serverMsg)
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
@@ -153,7 +153,7 @@ serverStuff :
        , update : msg -> model -> ( model, MultitierCmd remoteServerMsg msg )
        , subscriptions : model -> Sub msg
        , view : model -> Html msg
-       , serverState : serverModel -> serverState
+       , serverState : serverModel -> (serverState, serverModel, Cmd serverMsg)
        , serverRPCs : remoteServerMsg -> RPC serverModel msg serverMsg
        , initServer: (serverModel, Cmd serverMsg)
        , updateServer : serverMsg -> serverModel -> (serverModel, Cmd serverMsg)
@@ -224,16 +224,18 @@ unwrapUpdate config serverRPCs update =
     in  (newModel, unbatch config serverRPCs cmds)
 
 
-handle : (serverModel -> serverState) -> (remoteServerMsg -> RPC serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
+handle : (serverModel -> (serverState, serverModel, Cmd serverMsg)) -> (remoteServerMsg -> RPC serverModel msg serverMsg) -> HttpServer.Request -> serverModel -> (serverModel, Cmd (ServerMsg serverMsg))
 handle serverState serverRPCs request model =
   let pathList = List.filter (not << String.isEmpty) (String.split "/" request.path)
       invalidRequest = \message -> (model, HttpServer.reply request (encodeResponse (Response Nothing message)))
   in case request.method of
     GET -> case pathList of
-      [] -> (model, Task.attempt (\result -> case result of
-                                    Err _ ->    Reply request "Invalid request" Nothing
-                                    _     ->    ReplyFile request "index.html")
-                                 (File.write "state.js" ("let state="++ (toString (Encode.encode 0 (toJSON (serverState model)))))))
+      [] -> let (state, newServerModel, newCmd) = serverState model in
+        ( newServerModel , Cmd.batch
+          [ Cmd.map ServerUserMsg newCmd, Task.attempt (\result -> case result of
+              Err _ ->    Reply request "Invalid request" Nothing
+              _     ->    ReplyFile request "index.html")
+              (File.write "state.js" ("let state="++ (toString (Encode.encode 0 (toJSON state)))))])
       [filename] -> case File.exists filename of
         True -> (model, HttpServer.replyFile request filename)
         _ -> invalidRequest "File not found."
