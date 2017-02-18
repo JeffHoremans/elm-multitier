@@ -138,7 +138,6 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
 
       var broadcast = function(path, message) {
         return Scheduler.nativeBinding(function(callback) {
-          console.log(mounted[path] === true);
           if(mounted[path] === true){
             for (var id in active_connections[path]){
               active_connections[path][id].sendUTF(message);

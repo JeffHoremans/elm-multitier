@@ -25,14 +25,16 @@ decodecid = HttpServer.decodecid
 
 listen : String -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
 listen path onConnect onDisconnect onMessage =
-  let safePath = if String.startsWith "/" path then path else ("/" ++ path)
-    in HttpServer.listenToSocket safePath onConnect onDisconnect onMessage
+  HttpServer.listenToSocket (safePath path) onConnect onDisconnect onMessage
 
 broadcast : String -> String -> Cmd msg
-broadcast path message = HttpServer.broadcast path message
+broadcast path message = HttpServer.broadcast (safePath path) message
 
 multicast : String -> List ClientId -> String -> Cmd msg
 multicast path ids message = Cmd.batch (List.map (\cid -> send path cid message) ids)
 
 send : String -> ClientId -> String -> Cmd msg
-send path uid message = HttpServer.send path uid message
+send path uid message = HttpServer.send (safePath path) uid message
+
+safePath : String -> String
+safePath path = if String.startsWith "/" path then path else ("/" ++ path)
