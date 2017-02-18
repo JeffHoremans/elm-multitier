@@ -4,7 +4,6 @@ module Multitier.Server.WebSocket
         , encodecid
         , decodecid
         , listen
-        , monitor
         , listenAndMonitor
         , keepAlive
         , keepAliveAndMonitor
@@ -29,9 +28,6 @@ decodecid = HttpServer.decodecid
 
 listen : String -> ((ClientId, String) -> msg) -> Sub msg
 listen path onMessage = listenToSocket path Nothing Nothing (Just onMessage)
-
-monitor : String -> (ClientId -> msg) -> (ClientId -> msg) -> Sub msg
-monitor path onConnect onDisconnect = listenToSocket path (Just onConnect) (Just onDisconnect) Nothing
 
 listenAndMonitor : String -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
 listenAndMonitor path onConnect onDisconnect onMessage = listenToSocket path (Just onConnect) (Just onDisconnect) (Just onMessage)
