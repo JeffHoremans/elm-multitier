@@ -123,7 +123,6 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
-          console.log(router);
           callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing))
         });
       }
@@ -138,6 +137,11 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
       }
 
       var broadcast = function(path, message) {
+        console.log(path)
+        console.log(message)
+        console.log(mounted)
+        console.log(active_connections)
+        console.log(mounted[path] === true)
         return Scheduler.nativeBinding(function(callback) {
           if(mounted[path] === true){
             for (var id in active_connections[path]){
