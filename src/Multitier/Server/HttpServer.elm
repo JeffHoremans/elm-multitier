@@ -62,20 +62,24 @@ cmdMap _ cmd = case cmd of
 -- SUBSCRIPTIONS
 
 
-type MySub msg = Listen Int (Request -> msg) | ListenSocket String (ClientId -> msg)  (ClientId -> msg) ((ClientId, String) -> msg)
+type MySub msg = Listen Int (Request -> msg) | ListenSocket String (Maybe (ClientId -> msg))  (Maybe (ClientId -> msg)) (Maybe ((ClientId, String) -> msg))
 
 listen : Int -> (Request -> msg) -> Sub msg
 listen portNumber tagger =
   subscription (Listen portNumber tagger)
 
-listenToSocket : String  -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId,String) -> msg) -> Sub msg
+listenToSocket : String  -> Maybe (ClientId -> msg) -> Maybe (ClientId -> msg) -> Maybe ((ClientId,String) -> msg) -> Sub msg
 listenToSocket path onConnect onDisconnect onMessage =
   subscription (ListenSocket path onConnect onDisconnect onMessage)
 
 subMap : (a -> b) -> MySub a -> MySub b
 subMap func sub = case sub of
   Listen portNumber tagger -> Listen portNumber (tagger >> func)
-  ListenSocket path onConnect onDisconnect onMessage -> ListenSocket path (onConnect >> func) (onDisconnect >> func) (onMessage >> func)
+  ListenSocket path onConnect onDisconnect onMessage ->
+    let map = \may -> case may of
+      Just onFunc -> Just (onFunc >> func)
+      _ -> Nothing in
+      ListenSocket path (map onConnect) (map onDisconnect) (map onMessage)
 
 
 -- MANAGER
@@ -84,7 +88,7 @@ type alias State msg =
   { server: Maybe Http.Server
   , socketRouter: Maybe SocketRouter
   , httpSub : Maybe (Int, (Request -> msg))
-  , socketSubs : Dict String (Array ((ClientId -> msg), (ClientId -> msg), ((ClientId,String) -> msg)))
+  , socketSubs : Dict String (Array (Maybe (ClientId -> msg), Maybe (ClientId -> msg), Maybe ((ClientId,String) -> msg)))
   , mounted : Set String
   }
 
@@ -177,7 +181,9 @@ onSelfMsg router selfMsg state =
       case state.socketRouter of
         Just socketRouter -> case Dict.get path state.socketSubs of
           Just subs -> subs
-            |> Array.map (\(onConnect,_,_) -> Platform.sendToApp router (onConnect (Http.ClientId path clientId)))
+            |> Array.map (\(maybeOnConnect,_,_) -> case maybeOnConnect of
+              Just onConnect -> Platform.sendToApp router (onConnect (Http.ClientId path clientId))
+              _ -> Task.succeed ())
             |> Array.toList
             |> Task.sequence
             |> Task.andThen (\_ -> Task.succeed state)
@@ -187,7 +193,9 @@ onSelfMsg router selfMsg state =
       case state.socketRouter of
         Just socketRouter -> case Dict.get path state.socketSubs of
           Just subs -> subs
-            |> Array.map (\(_,onDisconnect,_) ->  Platform.sendToApp router (onDisconnect (Http.ClientId path clientId)))
+            |> Array.map (\(_,maybeOnDisconnect,_) -> case maybeOnDisconnect of
+              Just onDisconnect -> Platform.sendToApp router (onDisconnect (Http.ClientId path clientId))
+              _ -> Task.succeed ())
             |> Array.toList
             |> Task.sequence
             |> Task.andThen (\_ -> Task.succeed state)
@@ -197,7 +205,9 @@ onSelfMsg router selfMsg state =
       case state.socketRouter of
         Just socketRouter -> case Dict.get path state.socketSubs of
           Just subs -> subs
-            |> Array.map (\(_,_,onMessage) -> Platform.sendToApp router (onMessage ((Http.ClientId path clientId),message)))
+            |> Array.map (\(_,_,maybeOnMessage) -> case maybeOnMessage of
+              Just onMessage -> Platform.sendToApp router (onMessage ((Http.ClientId path clientId),message))
+              _ -> Task.succeed ())
             |> Array.toList
             |> Task.sequence
             |> Task.andThen (\_ -> Task.succeed state)

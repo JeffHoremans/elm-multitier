@@ -4,6 +4,10 @@ module Multitier.Server.WebSocket
         , encodecid
         , decodecid
         , listen
+        , monitor
+        , listenAndMonitor
+        , keepAlive
+        , keepAliveAndMonitor
         , broadcast
         , multicast
         , send
@@ -23,9 +27,23 @@ encodecid = HttpServer.encodecid
 decodecid : Decoder ClientId
 decodecid = HttpServer.decodecid
 
-listen : String -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
-listen path onConnect onDisconnect onMessage =
-  HttpServer.listenToSocket (safePath path) onConnect onDisconnect onMessage
+listen : String -> ((ClientId, String) -> msg) -> Sub msg
+listen path onMessage = listenToSocket path Nothing Nothing (Just onMessage)
+
+monitor : String -> (ClientId -> msg) -> (ClientId -> msg) -> Sub msg
+monitor path onConnect onDisconnect = listenToSocket path (Just onConnect) (Just onDisconnect) Nothing
+
+listenAndMonitor : String -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
+listenAndMonitor path onConnect onDisconnect onMessage = listenToSocket path (Just onConnect) (Just onDisconnect) (Just onMessage)
+
+keepAlive : String -> Sub msg
+keepAlive path = HttpServer.listenToSocket (safePath path) Nothing Nothing Nothing
+
+keepAliveAndMonitor : String -> (ClientId -> msg) -> (ClientId -> msg) -> Sub msg
+keepAliveAndMonitor path onConnect onDisconnect = HttpServer.listenToSocket (safePath path) (Just onConnect) (Just onDisconnect) Nothing
+
+listenToSocket : String -> Maybe (ClientId -> msg) -> Maybe (ClientId -> msg) -> Maybe ((ClientId, String) -> msg) -> Sub msg
+listenToSocket path onConnect onDisconnect onMessage = HttpServer.listenToSocket (safePath path) onConnect onDisconnect onMessage
 
 broadcast : String -> String -> Cmd msg
 broadcast path message = HttpServer.broadcast (safePath path) message
