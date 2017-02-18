@@ -33,13 +33,13 @@ listenAndMonitor : String -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientI
 listenAndMonitor path onConnect onDisconnect onMessage = listenToSocket path (Just onConnect) (Just onDisconnect) (Just onMessage)
 
 keepAlive : String -> Sub msg
-keepAlive path = HttpServer.listenToSocket (safePath path) Nothing Nothing Nothing
+keepAlive path = listenToSocket path Nothing Nothing Nothing
 
 keepAliveAndMonitor : String -> (ClientId -> msg) -> (ClientId -> msg) -> Sub msg
-keepAliveAndMonitor path onConnect onDisconnect = HttpServer.listenToSocket (safePath path) (Just onConnect) (Just onDisconnect) Nothing
+keepAliveAndMonitor path onConnect onDisconnect = listenToSocket path (Just onConnect) (Just onDisconnect) Nothing
 
 listenToSocket : String -> Maybe (ClientId -> msg) -> Maybe (ClientId -> msg) -> Maybe ((ClientId, String) -> msg) -> Sub msg
-listenToSocket path onConnect onDisconnect onMessage = HttpServer.listenToSocket (safePath path) onConnect onDisconnect onMessage
+listenToSocket path onConnect onDisconnect onMessage = HttpServer.listenToSocket path onConnect onDisconnect onMessage
 
 broadcast : String -> String -> Cmd msg
 broadcast path message = HttpServer.broadcast (safePath path) message
