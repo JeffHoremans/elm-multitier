@@ -127,7 +127,7 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         });
       }
 
-      var closeSocket = function(path, socket){
+      var closeSocket = function(router, path){
         return Scheduler.nativeBinding(function(callback){
           router.unmount(path, '____no_protocol____');
           mounted[path] = false;
