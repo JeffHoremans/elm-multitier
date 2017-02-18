@@ -123,10 +123,6 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
-          console.log(active_connections)
-          router.on('upgrade', function(){
-            console.log(active_connections)
-          })
           callback(Scheduler.succeed(_elm_lang$core$Maybe$Nothing))
         });
       }
