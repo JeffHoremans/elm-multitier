@@ -10,7 +10,6 @@ module Multitier.Server.HttpServer.LowLevel exposing
   , send
   , Server
   , SocketRouter
-  , Socket(..)
   , Request
   , ClientId(..)
   , encodecid
@@ -28,7 +27,6 @@ import Multitier.Server.HttpServer.Utils exposing (Method)
 
 type Server = Server
 type SocketRouter = SocketRouter
-type Socket = Socket String
 
 type alias Request = { method: Method
                      , path: String
@@ -74,14 +72,14 @@ replyFile request filename = Native.Multitier.Server.HttpServer.LowLevel.replyFi
 createSocketRouter : Server -> Task x SocketRouter
 createSocketRouter server = Native.Multitier.Server.HttpServer.LowLevel.createSocketRouter server
 
-openSocket : SocketRouter -> String -> WebSocketEventHandlers -> Task x Socket
+openSocket : SocketRouter -> String -> WebSocketEventHandlers -> Task x ()
 openSocket router path handlers = Native.Multitier.Server.HttpServer.LowLevel.openSocket router path handlers
 
-closeSocket : SocketRouter -> Socket -> Task x ()
-closeSocket router socket = Native.Multitier.Server.HttpServer.LowLevel.closeSocket router socket
+closeSocket : SocketRouter -> String -> Task x ()
+closeSocket router path = Native.Multitier.Server.HttpServer.LowLevel.closeSocket router path
 
-broadcast : Socket -> String -> Task x ()
-broadcast socket message = Native.Multitier.Server.HttpServer.LowLevel.broadcast socket message
+broadcast : String -> String -> Task x ()
+broadcast path message = Native.Multitier.Server.HttpServer.LowLevel.broadcast path message
 
-send : Socket -> ClientId -> String -> Task x ()
-send socket cid message = Native.Multitier.Server.HttpServer.LowLevel.send socket cid message
+send : String -> ClientId -> String -> Task x ()
+send path cid message = Native.Multitier.Server.HttpServer.LowLevel.send path cid message

@@ -1,7 +1,6 @@
 module Multitier.Server.WebSocket
     exposing
-        ( WebSocket
-        , ClientId
+        ( ClientId
         , encodecid
         , decodecid
         , listen
@@ -16,7 +15,6 @@ import Json.Decode as Decode exposing (Decoder)
 
 import Multitier.Server.HttpServer as HttpServer
 
-type alias WebSocket = HttpServer.Socket
 type alias ClientId = HttpServer.ClientId
 
 encodecid : ClientId -> Value
@@ -25,16 +23,16 @@ encodecid = HttpServer.encodecid
 decodecid : Decoder ClientId
 decodecid = HttpServer.decodecid
 
-listen : String -> (WebSocket -> msg) -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
-listen path onSocketOpen onConnect onDisconnect onMessage =
+listen : String -> (ClientId -> msg) -> (ClientId -> msg) -> ((ClientId, String) -> msg) -> Sub msg
+listen path onConnect onDisconnect onMessage =
   let safePath = if String.startsWith "/" path then path else ("/" ++ path)
-    in HttpServer.listenToSocket safePath onSocketOpen onConnect onDisconnect onMessage
+    in HttpServer.listenToSocket safePath onConnect onDisconnect onMessage
 
-broadcast : WebSocket -> String -> Cmd msg
-broadcast server message = HttpServer.broadcast server message
+broadcast : String -> String -> Cmd msg
+broadcast path message = HttpServer.broadcast path message
 
-multicast : WebSocket -> List ClientId -> String -> Cmd msg
-multicast server ids message = Cmd.batch (List.map (\cid -> send server cid message) ids)
+multicast : String -> List ClientId -> String -> Cmd msg
+multicast path ids message = Cmd.batch (List.map (\cid -> send path cid message) ids)
 
-send : WebSocket -> ClientId -> String -> Cmd msg
-send server uid message = HttpServer.send server uid message
+send : String -> ClientId -> String -> Cmd msg
+send path uid message = HttpServer.send path uid message

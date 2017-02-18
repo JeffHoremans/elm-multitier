@@ -123,13 +123,12 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
             });
 
           });
-          callback(Scheduler.succeed({ ctor:"Socket", _0:path }))
+          callback(Scheduler.succeed())
         });
       }
 
-      var closeSocket = function(router, socket){
+      var closeSocket = function(path, socket){
         return Scheduler.nativeBinding(function(callback){
-          var path = socket._0;
           router.unmount(path, '____no_protocol____');
           mounted[path] = false;
           console.log("Closed socket with path " + path );
@@ -137,9 +136,8 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         });
       }
 
-      var broadcast = function(socket, message) {
+      var broadcast = function(path, message) {
         return Scheduler.nativeBinding(function(callback) {
-          var path = socket._0;
           if(mounted[path] === true){
             for (var id in active_connections[path]){
               active_connections[path][id].sendUTF(message);
@@ -149,9 +147,8 @@ var _user$project$Native_Multitier_Server_HttpServer_LowLevel = function() {
         })
       }
 
-      var send = function(socket, cid, message) {
+      var send = function(path, cid, message) {
         return Scheduler.nativeBinding(function(callback) {
-          var path = socket._0;
           if (path === cid._0){
             if(mounted[path] === true){
               if(active_connections[path][cid._1]){
