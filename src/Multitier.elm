@@ -1,5 +1,5 @@
 module Multitier
-  exposing ( MultitierCmd
+  exposing ( MultitierCmd(..)
            , map
            , batch
            , none
