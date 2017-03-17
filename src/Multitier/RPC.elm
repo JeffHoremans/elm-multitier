@@ -17,15 +17,15 @@ type alias Handler msg = Result Error Value -> msg
 mapHandlers : (a -> msg) -> Handler a -> Handler msg
 mapHandlers f handler = handler >> f
 
-mapUpdate : (b -> serverMsg) -> (a -> serverModel -> (serverModel, Cmd serverMsg)) -> (serverModel -> a) -> (a -> (a, Task Error Value, Cmd b)) -> (serverModel -> (serverModel, Task Error Value, Cmd serverMsg))
-mapUpdate toServerMsg updateModel toA toTask = \serverModel ->
+mapUpdate : (a -> serverModel -> (serverModel, Cmd serverMsg, (b -> serverMsg))) -> (serverModel -> a) -> (a -> (a, Task Error Value, Cmd b)) -> (serverModel -> (serverModel, Task Error Value, Cmd serverMsg))
+mapUpdate updateModel toA toTask = \serverModel ->
   let a = (toA serverModel) in
     let (newA, task, cmd) = toTask a in
-      let (newModel, newCmd) = updateModel newA serverModel in
+      let (newModel, newCmd, toServerMsg) = updateModel newA serverModel in
         (newModel, task, Cmd.batch [newCmd, Cmd.map toServerMsg cmd])
 
-map : (b -> msg) -> (c -> serverMsg) -> (a -> serverModel -> (serverModel, Cmd serverMsg)) -> (serverModel -> a) -> RPC a b c -> RPC serverModel msg serverMsg
-map toMsg toServerMsg fromA toA (Rpc handlers update) = Rpc (mapHandlers toMsg handlers) (mapUpdate toServerMsg fromA toA update)
+map : (b -> msg) -> (a -> serverModel -> (serverModel, Cmd serverMsg, ((c -> serverMsg)))) -> (serverModel -> a) -> RPC a b c -> RPC serverModel msg serverMsg
+map toMsg fromA toA (Rpc handlers update) = Rpc (mapHandlers toMsg handlers) (mapUpdate fromA toA update)
 
 rpc : (Result Error result -> msg) -> (serverModel -> (serverModel, Task Error result, Cmd serverMsg)) -> RPC serverModel msg serverMsg
 rpc handler update =
