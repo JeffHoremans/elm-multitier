@@ -3,7 +3,7 @@ module Multitier.RPC exposing
   , Handler
   , rpc
   , map
-  , map2)
+  , mapTest)
 
 import Json.Encode as Encode exposing (Value)
 import Task exposing (Task)
@@ -35,8 +35,8 @@ rpc handler update =
                                      in (newServerModel, Task.map toJSON task, cmd)
   in Rpc mappedHandler mappedUpdate
 
-map2 : (b -> msg) -> ((a -> (a,Cmd c)) -> serverModel -> (serverModel, Cmd serverMsg)) -> (serverModel -> a) -> RPC a b c -> RPC serverModel msg serverMsg
-map2 toMsg wrapUpdate toA (Rpc handlers update) = Rpc (mapHandlers toMsg handlers) (mapUpdate2 wrapUpdate toA update)
+mapTest : (b -> msg) -> ((a -> (a,Cmd c)) -> serverModel -> (serverModel, Cmd serverMsg)) -> (serverModel -> a) -> RPC a b c -> RPC serverModel msg serverMsg
+mapTest toMsg wrapUpdate toA (Rpc handlers update) = Rpc (mapHandlers toMsg handlers) (mapUpdate2 wrapUpdate toA update)
 
 mapUpdate2 : ((a -> (a,Cmd c)) -> serverModel -> (serverModel, Cmd serverMsg)) -> (serverModel -> a) -> (a -> (a, Task Error Value, Cmd c)) -> (serverModel -> (serverModel, Task Error Value, Cmd serverMsg))
 mapUpdate2 wrapUpdate toA update = \serverModel ->
